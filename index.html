@@ -395,6 +395,10 @@
   }
   .table-scroll{overflow-x:auto;}
   .table-scroll-tall{max-height:62vh;overflow-y:auto;}
+  table.perm-table{min-width:0;width:100%;}
+  table.perm-table td, table.perm-table th{white-space:normal;}
+  table.perm-table td:first-child{white-space:nowrap;}
+  table.perm-table tbody td{height:auto;padding:12px;}
   table{width:100%;border-collapse:collapse;}
   table.emp-table{min-width:1720px;}
   thead th{
@@ -1076,13 +1080,13 @@
     <button class="btn btn-primary btn-sm" id="btnAddPermission">+ Thêm phân quyền</button>
   </div>
   <div class="table-scroll">
-    <table class="emp-table" id="permTable">
+    <table class="emp-table perm-table" id="permTable">
       <thead>
         <tr>
-          <th>Tên đăng nhập</th>
+          <th style="width:160px;">Tên đăng nhập</th>
           <th>Các tab được phép</th>
           <th>Cửa hàng được phép (Xếp lịch cửa hàng)</th>
-          <th style="width:90px;"></th>
+          <th style="width:80px;"></th>
         </tr>
       </thead>
       <tbody id="permTbody"></tbody>
@@ -2680,12 +2684,22 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     empty.style.display = 'none';
     tbody.innerHTML = usernames.map(function(u){
       var p = state.userPermissions[u];
-      var tabsLabel = Object.keys(p.tabs||{}).filter(function(k){ return p.tabs[k]; }).map(function(k){ return PERM_TAB_LABELS[k]; }).join(', ') || '—';
-      var storesLabel = (p.stores && p.stores.length) ? p.stores.map(escapeHtml).join(', ') : (p.tabs && p.tabs.schedule ? 'Tất cả cửa hàng' : '—');
+      var tabKeys = Object.keys(p.tabs||{}).filter(function(k){ return p.tabs[k]; });
+      var tabsHtml = tabKeys.length
+        ? tabKeys.map(function(k, i){ return '<span class="tag tag-'+(hashIndex(k))+'">'+escapeHtml(PERM_TAB_LABELS[k])+'</span>'; }).join(' ')
+        : '<span style="color:var(--ink-faint);">—</span>';
+      var storesHtml;
+      if(p.stores && p.stores.length){
+        storesHtml = p.stores.map(function(s){ return '<span class="tag tag-'+(hashIndex(s))+'">'+escapeHtml(s)+'</span>'; }).join(' ');
+      } else if(p.tabs && (p.tabs.schedule || p.tabs.tinhCong)){
+        storesHtml = '<span style="color:var(--ink-faint);">Tất cả cửa hàng</span>';
+      } else {
+        storesHtml = '<span style="color:var(--ink-faint);">—</span>';
+      }
       return '<tr>' +
         '<td class="col-code">'+escapeHtml(u)+'</td>' +
-        '<td>'+escapeHtml(tabsLabel)+'</td>' +
-        '<td>'+storesLabel+'</td>' +
+        '<td><div style="display:flex;flex-wrap:wrap;gap:6px;">'+tabsHtml+'</div></td>' +
+        '<td><div style="display:flex;flex-wrap:wrap;gap:6px;">'+storesHtml+'</div></td>' +
         '<td><button type="button" class="btn btn-ghost btn-sm perm-edit-btn" data-username="'+escapeHtml(u)+'">Sửa</button></td>' +
       '</tr>';
     }).join('');
