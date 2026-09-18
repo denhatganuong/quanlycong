@@ -691,6 +691,7 @@
     <button class="view-tab" id="tabSalary" data-view="salary">Phân bổ lương</button>
     <button class="view-tab" id="tabSchedule" data-view="schedule">Xếp lịch cửa hàng</button>
     <button class="view-tab" id="tabTinhCong" data-view="tinhCong">Tính công</button>
+    <button class="view-tab" id="tabPhanQuyen" data-view="phanQuyen" style="display:none;">Phân quyền</button>
   </div>
 
   <div id="viewEmployees">
@@ -1067,6 +1068,71 @@
         <p>Chưa có nhân viên hoặc chưa có lịch nào được xếp trong tháng này.</p>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="viewPhanQuyen" style="display:none;">
+  <div class="view-actions">
+    <button class="btn btn-primary btn-sm" id="btnAddPermission">+ Thêm phân quyền</button>
+  </div>
+  <div class="table-scroll">
+    <table class="emp-table" id="permTable">
+      <thead>
+        <tr>
+          <th>Tên đăng nhập</th>
+          <th>Các tab được phép</th>
+          <th>Cửa hàng được phép (Xếp lịch cửa hàng)</th>
+          <th style="width:90px;"></th>
+        </tr>
+      </thead>
+      <tbody id="permTbody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="permEmptyState" style="display:none;">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v16"/></svg>
+    <h3>Chưa có phân quyền nào</h3>
+    <p>Mặc định tài khoản không có trong danh sách sẽ được đầy đủ quyền. Thêm phân quyền để giới hạn 1 tài khoản cụ thể.</p>
+  </div>
+</div>
+
+<!-- Permission Add/Edit modal -->
+<div class="overlay" id="permFormOverlay">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="permFormTitle">
+    <div class="modal-head">
+      <h2 id="permFormTitle">Thêm phân quyền</h2>
+      <button class="close-x" id="permFormClose" aria-label="Đóng">✕</button>
+    </div>
+    <form id="permForm">
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-field full">
+            <label for="pf_username">Tên đăng nhập <span class="req">*</span></label>
+            <input type="text" id="pf_username" autocomplete="off">
+            <div class="err" id="e_pf_username"></div>
+          </div>
+          <div class="form-field full">
+            <label>Các tab được phép truy cập</label>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;">
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="employees"> Nhân viên</label>
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="jobTitles"> Khai báo</label>
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="salary"> Phân bổ lương</label>
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" id="pf_tab_schedule" value="schedule"> Xếp lịch cửa hàng</label>
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="tinhCong"> Tính công</label>
+            </div>
+          </div>
+          <div class="form-field full" id="pf_stores_wrap" style="display:none;">
+            <label>Chỉ cho tương tác với cửa hàng (chọn 1 hoặc nhiều)</label>
+            <div id="pf_stores_list" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;"></div>
+            <div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">Không chọn cửa hàng nào = được xem tất cả cửa hàng ở tab Xếp lịch cửa hàng.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-danger" id="permFormDelete" style="display:none;margin-right:auto;">Xóa phân quyền</button>
+        <button type="button" class="btn btn-ghost" id="permFormCancel">Hủy</button>
+        <button type="submit" class="btn btn-primary" id="permFormSubmit">Lưu</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -1745,11 +1811,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var SALARY_FIELDS = ["luongCB","chuyenCan","dienThoai","xangXe","hoTroKiemNhiem","kpiKhac"];
 
   /* ---------- Persistence (đổi sang Supabase — dữ liệu dùng chung qua internet) ---------- */
-  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','holidayMultipliers'];
+  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','holidayMultipliers','userPermissions'];
   var APP_STATE_DEFAULTS = {
     employees: [], jobTitles: [], shifts: [], salaryAllocations: {}, stores: [],
     schedule: {}, borrowedStaff: {}, employeeScheduleStatus: {}, tasks: [],
-    scheduleLocks: {}, holidayMultipliers: {}
+    scheduleLocks: {}, holidayMultipliers: {}, userPermissions: {}
   };
   async function load(){
     try{
@@ -1782,6 +1848,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function saveTasks(){ persistState('tasks', state.tasks); }
   function saveScheduleLocks(){ persistState('scheduleLocks', state.scheduleLocks); }
   function saveHolidayMultipliers(){ persistState('holidayMultipliers', state.holidayMultipliers); }
+  function saveUserPermissions(){ persistState('userPermissions', state.userPermissions); }
 
   function uid(){
     return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
@@ -2569,21 +2636,167 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('viewSalary').style.display = view === 'salary' ? '' : 'none';
     document.getElementById('viewSchedule').style.display = view === 'schedule' ? '' : 'none';
     document.getElementById('viewTinhCong').style.display = view === 'tinhCong' ? '' : 'none';
+    document.getElementById('viewPhanQuyen').style.display = view === 'phanQuyen' ? '' : 'none';
     document.getElementById('tabEmployees').classList.toggle('active', view === 'employees');
     document.getElementById('tabJobTitles').classList.toggle('active', view === 'jobTitles');
     document.getElementById('tabSalary').classList.toggle('active', view === 'salary');
     document.getElementById('tabSchedule').classList.toggle('active', view === 'schedule');
     document.getElementById('tabTinhCong').classList.toggle('active', view === 'tinhCong');
+    document.getElementById('tabPhanQuyen').classList.toggle('active', view === 'phanQuyen');
     if(view === 'jobTitles'){ renderStoreTable(); renderTaskTable(); renderJobTitleTable(); renderShiftTable(); }
     if(view === 'salary'){ renderSalaryTable(); }
     if(view === 'schedule'){ renderScheduleSidebar(); renderScheduleMain(); }
     if(view === 'tinhCong'){ renderTinhCong(); }
+    if(view === 'phanQuyen'){ renderPermissionTable(); }
   }
   document.getElementById('tabEmployees').addEventListener('click', function(){ switchView('employees'); });
   document.getElementById('tabJobTitles').addEventListener('click', function(){ switchView('jobTitles'); });
   document.getElementById('tabSalary').addEventListener('click', function(){ switchView('salary'); });
   document.getElementById('tabSchedule').addEventListener('click', function(){ switchView('schedule'); });
   document.getElementById('tabTinhCong').addEventListener('click', function(){ switchView('tinhCong'); });
+  document.getElementById('tabPhanQuyen').addEventListener('click', function(){ switchView('phanQuyen'); });
+
+  /* ---------- Phân quyền ---------- */
+  var PERM_TAB_LABELS = { employees:'Nhân viên', jobTitles:'Khai báo', salary:'Phân bổ lương', schedule:'Xếp lịch cửa hàng', tinhCong:'Tính công' };
+  var permFormOverlay = document.getElementById('permFormOverlay');
+  var permForm = document.getElementById('permForm');
+  var pfEditingUsername = null;
+
+  function renderPermissionTable(){
+    var tbody = document.getElementById('permTbody');
+    var empty = document.getElementById('permEmptyState');
+    var usernames = Object.keys(state.userPermissions || {}).sort(function(a,b){ return a.localeCompare(b,'vi'); });
+    if(usernames.length === 0){
+      tbody.innerHTML = '';
+      empty.style.display = 'flex';
+      return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = usernames.map(function(u){
+      var p = state.userPermissions[u];
+      var tabsLabel = Object.keys(p.tabs||{}).filter(function(k){ return p.tabs[k]; }).map(function(k){ return PERM_TAB_LABELS[k]; }).join(', ') || '—';
+      var storesLabel = (p.stores && p.stores.length) ? p.stores.map(escapeHtml).join(', ') : (p.tabs && p.tabs.schedule ? 'Tất cả cửa hàng' : '—');
+      return '<tr>' +
+        '<td class="col-code">'+escapeHtml(u)+'</td>' +
+        '<td>'+escapeHtml(tabsLabel)+'</td>' +
+        '<td>'+storesLabel+'</td>' +
+        '<td><button type="button" class="btn btn-ghost btn-sm perm-edit-btn" data-username="'+escapeHtml(u)+'">Sửa</button></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function fillPermStoreCheckboxes(selectedStores){
+    var wrap = document.getElementById('pf_stores_list');
+    var sorted = state.stores.slice().sort(function(a,b){ return (a.tenCuaHang||'').localeCompare(b.tenCuaHang||'', 'vi'); });
+    wrap.innerHTML = sorted.map(function(s){
+      var checked = (selectedStores||[]).indexOf(s.tenCuaHang) !== -1 ? ' checked' : '';
+      return '<label style="display:flex;align-items:center;gap:6px;font-weight:400;">' +
+        '<input type="checkbox" class="pf-store" value="'+escapeHtml(s.tenCuaHang)+'"'+checked+'> '+escapeHtml(s.tenCuaHang) +
+      '</label>';
+    }).join('');
+    if(sorted.length === 0) wrap.innerHTML = '<span style="font-size:12.5px;color:var(--ink-faint);">Chưa có cửa hàng nào — vào tab Khai báo để thêm.</span>';
+  }
+
+  function toggleStoresWrap(){
+    var scheduleChecked = document.getElementById('pf_tab_schedule').checked;
+    document.getElementById('pf_stores_wrap').style.display = scheduleChecked ? '' : 'none';
+  }
+  document.querySelectorAll('.pf-tab').forEach(function(cb){ cb.addEventListener('change', toggleStoresWrap); });
+
+  function openPermForm(username){
+    pfEditingUsername = username || null;
+    document.getElementById('permFormTitle').textContent = username ? 'Sửa phân quyền' : 'Thêm phân quyền';
+    document.getElementById('e_pf_username').textContent = '';
+    var usernameInput = document.getElementById('pf_username');
+    var existing = username ? state.userPermissions[username] : null;
+    usernameInput.value = username || '';
+    usernameInput.disabled = !!username;
+    document.querySelectorAll('.pf-tab').forEach(function(cb){
+      cb.checked = existing ? !!(existing.tabs && existing.tabs[cb.value]) : false;
+    });
+    fillPermStoreCheckboxes(existing ? existing.stores : []);
+    toggleStoresWrap();
+    document.getElementById('permFormDelete').style.display = username ? '' : 'none';
+    permFormOverlay.classList.add('show');
+    setTimeout(function(){ if(!username) usernameInput.focus(); }, 60);
+  }
+  function closePermForm(){
+    permFormOverlay.classList.remove('show');
+    pfEditingUsername = null;
+  }
+  document.getElementById('btnAddPermission').addEventListener('click', function(){ openPermForm(null); });
+  document.getElementById('permFormClose').addEventListener('click', closePermForm);
+  document.getElementById('permFormCancel').addEventListener('click', closePermForm);
+  permFormOverlay.addEventListener('click', function(ev){ if(ev.target === permFormOverlay) closePermForm(); });
+  document.getElementById('permTbody').addEventListener('click', function(ev){
+    var btn = ev.target.closest('.perm-edit-btn');
+    if(!btn) return;
+    openPermForm(btn.dataset.username);
+  });
+
+  permForm.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var usernameInput = document.getElementById('pf_username');
+    var username = usernameInput.value.trim().toLowerCase();
+    document.getElementById('e_pf_username').textContent = '';
+    if(!pfEditingUsername && !username){
+      document.getElementById('e_pf_username').textContent = 'Vui lòng nhập tên đăng nhập.';
+      return;
+    }
+    if(!pfEditingUsername && state.userPermissions[username]){
+      document.getElementById('e_pf_username').textContent = 'Tên đăng nhập này đã có phân quyền, hãy sửa thay vì thêm mới.';
+      return;
+    }
+    var finalUsername = pfEditingUsername || username;
+    var tabs = {};
+    document.querySelectorAll('.pf-tab').forEach(function(cb){ tabs[cb.value] = cb.checked; });
+    var stores = [];
+    document.querySelectorAll('.pf-store:checked').forEach(function(cb){ stores.push(cb.value); });
+    state.userPermissions[finalUsername] = { tabs: tabs, stores: stores };
+    saveUserPermissions();
+    closePermForm();
+    renderPermissionTable();
+    showToast('Đã lưu phân quyền cho ' + finalUsername + '.');
+  });
+  document.getElementById('permFormDelete').addEventListener('click', function(){
+    if(!pfEditingUsername) return;
+    delete state.userPermissions[pfEditingUsername];
+    saveUserPermissions();
+    closePermForm();
+    renderPermissionTable();
+    showToast('Đã xóa phân quyền.');
+  });
+
+  // Áp dụng phân quyền cho tài khoản đang đăng nhập — gọi sau khi load() xong, trước renderAll()
+  function applyPermissions(){
+    var username = (window.CURRENT_USERNAME || '').toLowerCase();
+    state.currentUsername = username;
+    var isSuperAdmin = username === 'admin';
+    document.getElementById('tabPhanQuyen').style.display = isSuperAdmin ? '' : 'none';
+    if(isSuperAdmin){ state.currentUserPerm = null; return; }
+
+    var perm = (state.userPermissions || {})[username];
+    state.currentUserPerm = perm || null;
+    if(!perm) return; // không có bản ghi = đầy đủ quyền (không giới hạn gì, giữ đúng hành vi gốc)
+
+    var tabButtons = {
+      employees: document.getElementById('tabEmployees'),
+      jobTitles: document.getElementById('tabJobTitles'),
+      salary: document.getElementById('tabSalary'),
+      schedule: document.getElementById('tabSchedule'),
+      tinhCong: document.getElementById('tabTinhCong')
+    };
+    var firstAllowed = null;
+    Object.keys(tabButtons).forEach(function(key){
+      var allowed = !!(perm.tabs && perm.tabs[key]);
+      tabButtons[key].style.display = allowed ? '' : 'none';
+      if(allowed && !firstAllowed) firstAllowed = key;
+    });
+    // Nếu tab đang mặc định (Nhân viên) không được phép, tự chuyển sang tab đầu tiên user được phép
+    if(!(perm.tabs && perm.tabs.employees) && firstAllowed){
+      switchView(firstAllowed);
+    }
+  }
 
   /* ---------- Stores: rendering ---------- */
   function getSortedStores(){
@@ -4081,12 +4294,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ---------- Schedule: sidebar ---------- */
   function renderScheduleSidebar(){
     var list = document.getElementById('scheduleStoreList');
-    if(state.stores.length === 0){
+    var allowedStores = (state.currentUserPerm && state.currentUserPerm.stores && state.currentUserPerm.stores.length) ? state.currentUserPerm.stores : null;
+    var storeList = allowedStores ? state.stores.filter(function(s){ return allowedStores.indexOf(s.tenCuaHang) !== -1; }) : state.stores;
+    if(storeList.length === 0){
       list.innerHTML = '<p style="padding:10px;font-size:12.5px;color:var(--ink-faint);">Chưa có cửa hàng nào. Vào tab Khai báo để thêm.</p>';
       return;
     }
+    if(allowedStores && allowedStores.indexOf(state.scheduleSelectedStore) === -1){
+      state.scheduleSelectedStore = storeList[0].tenCuaHang;
+    }
     var prevWeekStart = addDaysISO(getWeekStartISO(todayISO()), -7);
-    var sorted = state.stores.slice().sort(function(a,b){ return (a.tenCuaHang||'').localeCompare(b.tenCuaHang||'', 'vi'); });
+    var sorted = storeList.slice().sort(function(a,b){ return (a.tenCuaHang||'').localeCompare(b.tenCuaHang||'', 'vi'); });
     list.innerHTML = sorted.map(function(s){
       var count = getStoreEmployees(s.tenCuaHang).length;
       var active = s.tenCuaHang === state.scheduleSelectedStore;
@@ -5158,6 +5376,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Chỉ tải dữ liệu và render app SAU KHI đăng nhập thành công (sự kiện phát ra từ script đăng nhập ở trên)
   window.addEventListener('qlns-authed', async function(){
     await load();
+    applyPermissions();
     renderAll();
   }, { once: true });
 })();
@@ -5177,7 +5396,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var form = document.getElementById('loginForm');
     var errEl = document.getElementById('e_login');
 
-    function showApp() {
+    function showApp(email) {
+      window.CURRENT_USERNAME = (email || '').split('@')[0].toLowerCase();
       overlay.classList.remove('show');
       shell.style.visibility = 'visible';
       window.dispatchEvent(new Event('qlns-authed'));
@@ -5188,7 +5408,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
 
     window.supabaseClient.auth.getSession().then(function (res) {
-      if (res.data.session) showApp(); else showLogin();
+      if (res.data.session) showApp(res.data.session.user.email); else showLogin();
     });
 
     form.addEventListener('submit', function (ev) {
@@ -5210,7 +5430,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           errEl.textContent = 'Sai tên đăng nhập hoặc mật khẩu.';
           return;
         }
-        showApp();
+        showApp(res.data.user.email);
       });
     });
 
