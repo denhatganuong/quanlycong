@@ -2703,9 +2703,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(sorted.length === 0) wrap.innerHTML = '<span style="font-size:12.5px;color:var(--ink-faint);">Chưa có cửa hàng nào — vào tab Khai báo để thêm.</span>';
   }
 
+  document.getElementById('pf_stores_list').addEventListener('change', function(ev){
+    if(!ev.target.classList.contains('pf-store')) return;
+    var anyChecked = document.querySelectorAll('.pf-store:checked').length > 0;
+    if(anyChecked){
+      document.getElementById('pf_tab_schedule').checked = true;
+      document.querySelector('.pf-tab[value="tinhCong"]').checked = true;
+      toggleStoresWrap();
+    }
+  });
+
   function toggleStoresWrap(){
     var scheduleChecked = document.getElementById('pf_tab_schedule').checked;
-    document.getElementById('pf_stores_wrap').style.display = scheduleChecked ? '' : 'none';
+    var tinhCongChecked = document.querySelector('.pf-tab[value="tinhCong"]').checked;
+    document.getElementById('pf_stores_wrap').style.display = (scheduleChecked || tinhCongChecked) ? '' : 'none';
   }
   document.querySelectorAll('.pf-tab').forEach(function(cb){ cb.addEventListener('change', toggleStoresWrap); });
 
@@ -5169,7 +5180,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
   function getTinhCongFilteredEmployees(){
     var q = state.tcSearch.trim().toLowerCase();
+    var allowedStores = (state.currentUserPerm && state.currentUserPerm.stores && state.currentUserPerm.stores.length) ? state.currentUserPerm.stores : null;
     return state.employees.filter(function(e){
+      if(allowedStores && allowedStores.indexOf(e.chiNhanh) === -1) return false;
       if(state.tcFilterTitle && e.chucDanh !== state.tcFilterTitle) return false;
       if(state.tcFilterStore && e.chiNhanh !== state.tcFilterStore) return false;
       if(!q) return true;
@@ -5256,7 +5269,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     monthSel.value = String(state.tcMonth);
     document.getElementById('tcYear').value = state.tcYear;
     fillSelect('tcFilterTitle', uniqueValues('chucDanh'), 'Tất cả chức vụ');
-    fillSelect('tcFilterStore', uniqueValues('chiNhanh'), 'Tất cả cửa hàng');
+    var tcAllowedStores = (state.currentUserPerm && state.currentUserPerm.stores && state.currentUserPerm.stores.length) ? state.currentUserPerm.stores : null;
+    fillSelect('tcFilterStore', tcAllowedStores || uniqueValues('chiNhanh'), 'Tất cả cửa hàng');
 
     var year = state.tcYear, month = state.tcMonth;
     var numDays = daysInMonth(year, month);
