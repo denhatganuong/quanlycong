@@ -1110,6 +1110,12 @@
             <input type="text" id="pf_username" autocomplete="off">
             <div class="err" id="e_pf_username"></div>
           </div>
+          <div class="form-field full" id="pf_password_wrap">
+            <label for="pf_password">Mật khẩu đăng nhập <span class="req">*</span></label>
+            <input type="text" id="pf_password" autocomplete="off" placeholder="VD: 123456">
+            <div class="err" id="e_pf_password"></div>
+            <div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px;">Tài khoản đăng nhập sẽ được tạo cùng lúc lưu phân quyền — nhớ gửi lại mật khẩu này cho nhân viên.</div>
+          </div>
           <div class="form-field full">
             <label>Các tab được phép truy cập</label>
             <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;">
@@ -2711,6 +2717,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var existing = username ? state.userPermissions[username] : null;
     usernameInput.value = username || '';
     usernameInput.disabled = !!username;
+    document.getElementById('pf_password_wrap').style.display = username ? 'none' : '';
+    document.getElementById('pf_password').value = '';
+    document.getElementById('e_pf_password').textContent = '';
     document.querySelectorAll('.pf-tab').forEach(function(cb){
       cb.checked = existing ? !!(existing.tabs && existing.tabs[cb.value]) : false;
     });
@@ -2734,11 +2743,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     openPermForm(btn.dataset.username);
   });
 
-  permForm.addEventListener('submit', function(ev){
+  permForm.addEventListener('submit', async function(ev){
     ev.preventDefault();
     var usernameInput = document.getElementById('pf_username');
     var username = usernameInput.value.trim().toLowerCase();
     document.getElementById('e_pf_username').textContent = '';
+    document.getElementById('e_pf_password').textContent = '';
     if(!pfEditingUsername && !username){
       document.getElementById('e_pf_username').textContent = 'Vui lòng nhập tên đăng nhập.';
       return;
@@ -2748,6 +2758,41 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return;
     }
     var finalUsername = pfEditingUsername || username;
+    var submitBtn = document.getElementById('permFormSubmit');
+
+    if(!pfEditingUsername){
+      var password = document.getElementById('pf_password').value;
+      if(!password || password.length < 6){
+        document.getElementById('e_pf_password').textContent = 'Mật khẩu cần tối thiểu 6 ký tự.';
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Đang tạo tài khoản...';
+      try{
+        var sessionRes = await window.supabaseClient.auth.getSession();
+        var token = sessionRes.data.session ? sessionRes.data.session.access_token : null;
+        var resp = await fetch('/api/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: finalUsername, password: password, callerToken: token })
+        });
+        var result = await resp.json();
+        if(!resp.ok){
+          document.getElementById('e_pf_password').textContent = result.error || 'Không tạo được tài khoản.';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Lưu';
+          return;
+        }
+      }catch(e){
+        document.getElementById('e_pf_password').textContent = 'Lỗi kết nối máy chủ, thử lại.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Lưu';
+        return;
+      }
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Lưu';
+    }
+
     var tabs = {};
     document.querySelectorAll('.pf-tab').forEach(function(cb){ tabs[cb.value] = cb.checked; });
     var stores = [];
@@ -2756,7 +2801,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     saveUserPermissions();
     closePermForm();
     renderPermissionTable();
-    showToast('Đã lưu phân quyền cho ' + finalUsername + '.');
+    showToast(pfEditingUsername ? ('Đã lưu phân quyền cho ' + finalUsername + '.') : ('Đã tạo tài khoản và phân quyền cho ' + finalUsername + '.'));
   });
   document.getElementById('permFormDelete').addEventListener('click', function(){
     if(!pfEditingUsername) return;
