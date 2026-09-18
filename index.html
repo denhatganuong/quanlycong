@@ -5516,10 +5516,35 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       overlay.classList.remove('show');
       shell.style.visibility = 'visible';
       window.dispatchEvent(new Event('qlns-authed'));
+      startInactivityWatcher();
     }
     function showLogin() {
       shell.style.visibility = 'hidden';
       overlay.classList.add('show');
+      stopInactivityWatcher();
+    }
+
+    // ====== Tự động đăng xuất sau 2 tiếng không thao tác ======
+    var INACTIVITY_LIMIT_MS = 2 * 60 * 60 * 1000; // 2 giờ
+    var inactivityTimer = null;
+    var inactivityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'click', 'touchstart'];
+    function handleActivity() { resetInactivityTimer(); }
+    function resetInactivityTimer() {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(function () {
+        window.supabaseClient.auth.signOut().then(function () {
+          alert('Bạn đã bị đăng xuất do không thao tác trong 2 tiếng. Vui lòng đăng nhập lại.');
+          location.reload();
+        });
+      }, INACTIVITY_LIMIT_MS);
+    }
+    function startInactivityWatcher() {
+      inactivityEvents.forEach(function (evt) { document.addEventListener(evt, handleActivity, { passive: true }); });
+      resetInactivityTimer();
+    }
+    function stopInactivityWatcher() {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityEvents.forEach(function (evt) { document.removeEventListener(evt, handleActivity); });
     }
 
     window.supabaseClient.auth.getSession().then(function (res) {
