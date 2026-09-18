@@ -954,7 +954,10 @@
   <div id="viewSchedule" style="display:none;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
       <p style="font-size:12.5px;color:var(--ink-soft);margin:0;">Xuất toàn bộ lịch xếp ca của tất cả cửa hàng trong tuần đang xem.</p>
-      <button class="btn btn-ghost btn-sm" id="btnExportAllSchedule">📥 Xuất Excel (tất cả cửa hàng)</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" id="btnAddEmployeeFromSchedule">+ Thêm nhân viên</button>
+        <button class="btn btn-ghost btn-sm" id="btnExportAllSchedule">📥 Xuất Excel (tất cả cửa hàng)</button>
+      </div>
     </div>
     <div class="schedule-shell">
       <div class="schedule-sidebar">
@@ -2273,10 +2276,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     save();
     renderAll();
+    if(state.currentView === 'schedule'){ renderScheduleSidebar(); renderScheduleMain(); }
     closeForm();
   });
 
   document.getElementById('btnAdd').addEventListener('click', function(){ openForm(null); });
+  document.getElementById('btnAddEmployeeFromSchedule').addEventListener('click', function(){
+    openForm(null);
+    if(state.scheduleSelectedStore){
+      populateSelect(document.getElementById('f_chiNhanh'), getDeclaredChiNhanhNames(), state.scheduleSelectedStore, '-- Chọn cửa hàng --');
+    }
+  });
   document.getElementById('btnEmptyAdd').addEventListener('click', function(){ openForm(null); });
   document.getElementById('formClose').addEventListener('click', closeForm);
   document.getElementById('formCancel').addEventListener('click', closeForm);
@@ -5175,9 +5185,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ---------- Tính công: helpers ---------- */
   function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
   function tcDateISO(year, month, day){ return year + '-' + pad2(month) + '-' + pad2(day); }
-  function computeDayInfo(maNV, dateISO){
+  function computeDayInfo(maNV, dateISO, storeFilter){
     var entry = getScheduleEntry(maNV, dateISO);
     if(!entry) return null;
+    if(storeFilter && entry.store !== storeFilter) return null;
     if(entry.off) return { type:'off', label:'OFF', hours:0 };
     var objs = getScheduleShiftObjects(maNV, dateISO);
     if(objs.length === 0) return null;
@@ -5205,13 +5216,31 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return hay.indexOf(q) !== -1;
     });
   }
-  function getTinhCongGroups(employees){
+  function getTinhCongGroups(employees, year, month, numDays){
     var groups = {};
+    function ensureGroup(key){ if(!groups[key]) groups[key] = []; return groups[key]; }
+
     employees.forEach(function(e){
-      var key = e.chiNhanh || '(Chưa gán cửa hàng)';
-      if(!groups[key]) groups[key] = [];
-      groups[key].push(e);
+      var storesWorked = {};
+      if(year && month && numDays){
+        for(var d = 1; d <= numDays; d++){
+          var dateISO = tcDateISO(year, month, d);
+          var entry = getScheduleEntry(e.maNV, dateISO);
+          if(!entry || !entry.store || entry.off) continue;
+          var weekStart = getWeekStartISO(dateISO);
+          if(!isWeekLocked(entry.store, weekStart)) continue;
+          storesWorked[entry.store] = true;
+        }
+      }
+      var storeKeys = Object.keys(storesWorked);
+      if(storeKeys.length === 0){
+        // Chưa có ngày công nào đã chốt trong tháng -> vẫn hiện dưới chi nhánh gốc (0 giờ) để dễ theo dõi
+        ensureGroup(e.chiNhanh || '(Chưa gán cửa hàng)').push(e);
+      } else {
+        storeKeys.forEach(function(sn){ ensureGroup(sn).push(e); });
+      }
     });
+
     var storeNames = Object.keys(groups).sort(function(a,b){ return a.localeCompare(b, 'vi'); });
     storeNames.forEach(function(sn){
       groups[sn].sort(function(a,b){ return (a.hoTen||'').localeCompare(b.hoTen||'', 'vi'); });
@@ -5226,7 +5255,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var r = Math.round((n || 0) * 10) / 10;
     return (r % 1 === 0 ? r.toFixed(0) : r.toFixed(1)) + 'h';
   }
-  function computeMonthlyStats(e, year, month, numDays){
+  function computeMonthlyStats(e, year, month, numDays, storeFilter){
     var jt = getJobTitleFor(e.chucDanh);
     var gioChuanNgay = jt ? (Number(jt.gioChuanNgay) || 0) : 0;
     var soNgayNghi = jt ? (Number(jt.soNgayNghi) || 0) : 0;
@@ -5239,6 +5268,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var dateISO = tcDateISO(year, month, d);
       var entry = getScheduleEntry(e.maNV, dateISO);
       if(!entry || !entry.store || entry.off) continue;
+      if(storeFilter && entry.store !== storeFilter) continue;
       var weekStart = getWeekStartISO(dateISO);
       if(!isWeekLocked(entry.store, weekStart)) continue;
       getScheduleShiftObjects(e.maNV, dateISO).forEach(function(o){
@@ -5312,7 +5342,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('tcHolidayRow').innerHTML = holidayHtml;
 
     var filtered = getTinhCongFilteredEmployees();
-    var grouped = getTinhCongGroups(filtered);
+    var grouped = getTinhCongGroups(filtered, year, month, numDays);
     var tbody = document.getElementById('tcTbody');
     var empty = document.getElementById('tcEmptyState');
 
@@ -5329,7 +5359,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           (mgr ? ' <span class="tc-mgr">| '+escapeHtml(mgr.hoTen)+'</span>' : '') +
         '</td></tr>';
         var empRows = grouped.groups[storeName].map(function(e){
-          var stats = computeMonthlyStats(e, year, month, numDays);
+          var stats = computeMonthlyStats(e, year, month, numDays, storeName);
           var rowHtml = '<tr>' +
             '<td class="tc-name-cell col-code">'+escapeHtml(e.maNV)+'</td>' +
             '<td class="tc-name-cell"><div class="n">'+escapeHtml(e.hoTen||'—')+'</div></td>' +
@@ -5342,7 +5372,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
             '<td class="tc-summary-cell">'+fmtMoney(stats.tienCong)+'</td>' +
             '<td class="tc-summary-cell tc-total-cell">'+fmtMoney(stats.tongLuong)+'</td>';
           dayList.forEach(function(dd){
-            var info = computeDayInfo(e.maNV, tcDateISO(year, month, dd));
+            var info = computeDayInfo(e.maNV, tcDateISO(year, month, dd), storeName);
             rowHtml += info ? '<td><span class="tc-day-cell '+info.type+'">'+info.label+'</span></td>' : '<td>-</td>';
           });
           rowHtml += '</tr>';
@@ -5406,18 +5436,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       showToast('Không có nhân viên nào để xuất.', true);
       return;
     }
-    var grouped = getTinhCongGroups(filtered);
+    var grouped = getTinhCongGroups(filtered, year, month, numDays);
     var headers = ['Cửa hàng','Mã NV','Tên nhân viên','Chức vụ','Hộ KD',
       'Số giờ Thực hiện','Số giờ công chuẩn','Giờ OT','Số tiền OT','Tiền công','Tổng lương'];
     for(var dd = 1; dd <= numDays; dd++) headers.push('Ngày ' + dd);
     var data = [headers];
     grouped.storeNames.forEach(function(storeName){
       grouped.groups[storeName].forEach(function(e){
-        var stats = computeMonthlyStats(e, year, month, numDays);
+        var stats = computeMonthlyStats(e, year, month, numDays, storeName);
         var row = [storeName, e.maNV, e.hoTen, e.chucDanh||'', e.hoKinhDoanh||'',
           stats.soGioThucHien, stats.soGioCongChuan, stats.gioOT, stats.tienOT, stats.tienCong, stats.tongLuong];
         for(var d2 = 1; d2 <= numDays; d2++){
-          var info = computeDayInfo(e.maNV, tcDateISO(year, month, d2));
+          var info = computeDayInfo(e.maNV, tcDateISO(year, month, d2), storeName);
           if(!info) row.push('');
           else row.push(info.type === 'off' ? 'OFF' : info.label);
         }
