@@ -5305,7 +5305,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     for(var hi=0; hi<SUMMARY_HEADS.length; hi++) holidayHtml += '<th></th>';
     dayList.forEach(function(dd){
       var val = hmap[dd] || '1';
-      holidayHtml += '<th><select class="tc-holiday-select" data-day="'+dd+'">' +
+      holidayHtml += '<th><select class="tc-holiday-select" data-day="'+dd+'" data-prev="'+val+'">' +
         holidayOptions.map(function(v){ return '<option value="'+v+'"'+(v===val?' selected':'')+'>'+v+'</option>'; }).join('') +
       '</select></th>';
     });
@@ -5378,13 +5378,24 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     state.tcFilterStore = ev.target.value;
     renderTinhCong();
   });
+  var HOLIDAY_EDIT_PASSWORD = '0000';
   document.getElementById('tcHolidayRow').addEventListener('change', function(ev){
     var sel = ev.target.closest('.tc-holiday-select');
     if(!sel) return;
+    var prevVal = sel.dataset.prev || '1';
+    var newVal = sel.value;
+    var pass = window.prompt('Nhập mật khẩu để thay đổi hệ số ngày lễ:');
+    if(pass !== HOLIDAY_EDIT_PASSWORD){
+      sel.value = prevVal;
+      if(pass !== null) showToast('Sai mật khẩu, không thay đổi được hệ số.', true);
+      return;
+    }
+    sel.dataset.prev = newVal;
     var hkey2 = state.tcYear + '-' + pad2(state.tcMonth);
     if(!state.holidayMultipliers[hkey2]) state.holidayMultipliers[hkey2] = {};
-    state.holidayMultipliers[hkey2][sel.dataset.day] = sel.value;
+    state.holidayMultipliers[hkey2][sel.dataset.day] = newVal;
     saveHolidayMultipliers();
+    showToast('Đã cập nhật hệ số ngày lễ.');
   });
 
   document.getElementById('btnExportTinhCong').addEventListener('click', function(){
