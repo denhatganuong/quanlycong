@@ -2390,6 +2390,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(submitBtn){ submitBtn.disabled = false; }
     if(!ok) return; // lỗi đã báo trong hàm — giữ nguyên form để thử lưu lại, không mất dữ liệu đang nhập
 
+    if(!isEdit){
+      // Phòng trường hợp mã NV này từng dùng cho 1 nhân viên khác đã bị xoá trước đó (mã bị cấp lại) —
+      // dọn sạch mọi dữ liệu cũ gắn với mã này để không bị "thừa kế" nhầm lịch làm của người cũ.
+      var newMaNV = data.maNV;
+      await saveScheduleMutation(function(fresh){
+        var prefix = newMaNV + '|';
+        Object.keys(fresh).forEach(function(k){ if(k.indexOf(prefix) === 0) delete fresh[k]; });
+      });
+      await mutateStateKeySafe('employeeScheduleStatus', function(fresh){ delete fresh[newMaNV]; });
+    }
+
     showToast(isEdit ? 'Đã cập nhật thông tin nhân viên.' : 'Đã thêm nhân viên mới.');
     renderAll();
     if(state.currentView === 'schedule'){ renderScheduleSidebar(); renderScheduleMain(); }
@@ -5790,6 +5801,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       Object.keys(fresh).forEach(function(k){
         var datePart = k.split('|')[1];
         if(datePart && datePart < cutoffISO) delete fresh[k];
+      });
+    });
+
+    // Dọn dữ liệu MỒ CÔI: xoá mọi lịch làm/trạng thái gắn với mã NV không còn tồn tại trong danh sách
+    // Nhân viên hiện tại — tránh trường hợp mã NV bị cấp lại (VD: NEW0001) "thừa kế" nhầm lịch làm cũ
+    // của người đã bị xoá trước đó.
+    var validMaNVSet = {};
+    state.employees.forEach(function(e){ if(e.maNV) validMaNVSet[e.maNV] = true; });
+
+    await mutateStateKeySafe('schedule', function(fresh){
+      Object.keys(fresh).forEach(function(k){
+        var maNVPart = k.split('|')[0];
+        if(!validMaNVSet[maNVPart]) delete fresh[k];
+      });
+    });
+    await mutateStateKeySafe('employeeScheduleStatus', function(fresh){
+      Object.keys(fresh).forEach(function(k){
+        if(!validMaNVSet[k]) delete fresh[k];
+      });
+    });
+    await mutateStateKeySafe('borrowedStaff', function(fresh){
+      Object.keys(fresh).forEach(function(storeWeekKey){
+        var list = fresh[storeWeekKey];
+        if(!Array.isArray(list)) return;
+        var filtered = list.filter(function(maNV){ return validMaNVSet[maNV]; });
+        if(filtered.length !== list.length) fresh[storeWeekKey] = filtered;
       });
     });
 
