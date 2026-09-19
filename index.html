@@ -1830,12 +1830,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     schedule: {}, borrowedStaff: {}, employeeScheduleStatus: {}, tasks: [],
     scheduleLocks: {}, holidayMultipliers: {}, userPermissions: {}
   };
+  var lastKnownUpdatedAt = {};
+
   async function load(){
     try{
-      var res = await window.supabaseClient.from('app_state').select('key,data');
+      var res = await window.supabaseClient.from('app_state').select('key,data,updated_at');
       if(res.error) throw res.error;
       var map = {};
-      (res.data || []).forEach(function(row){ map[row.key] = row.data; });
+      (res.data || []).forEach(function(row){ map[row.key] = row.data; lastKnownUpdatedAt[row.key] = row.updated_at; });
       APP_STATE_KEYS.forEach(function(k){
         state[k] = (map[k] !== undefined && map[k] !== null) ? map[k] : APP_STATE_DEFAULTS[k];
       });
@@ -1844,14 +1846,87 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       APP_STATE_KEYS.forEach(function(k){ state[k] = APP_STATE_DEFAULTS[k]; });
     }
   }
-  function persistState(key, value){
-    window.supabaseClient.from('app_state').upsert({ key: key, data: value }, { onConflict: 'key' })
-      .then(function(res){
-        if(res && res.error) showToast("Không thể lưu dữ liệu lên máy chủ.", true);
-      });
+
+  // Trước khi lưu: kiểm tra xem có ai vừa cập nhật đúng dữ liệu này trước mình chưa (kể từ lần mình đọc gần nhất).
+  // Nếu có -> TỪ CHỐI lưu (không ghi đè mất dữ liệu người khác), báo người dùng tải lại trang.
+  async function persistState(key, value){
+    try{
+      var checkRes = await window.supabaseClient.from('app_state').select('updated_at').eq('key', key).maybeSingle();
+      var serverUpdatedAt = checkRes.data ? checkRes.data.updated_at : null;
+      var known = lastKnownUpdatedAt[key];
+      if(known && serverUpdatedAt && known !== serverUpdatedAt){
+        showToast('Dữ liệu vừa được người khác cập nhật — vui lòng tải lại trang (F5) rồi thao tác lại để không bị mất dữ liệu.', true);
+        return false;
+      }
+      var res = await window.supabaseClient.from('app_state').upsert({ key: key, data: value }, { onConflict: 'key' }).select('updated_at').single();
+      if(res.error) throw res.error;
+      lastKnownUpdatedAt[key] = res.data ? res.data.updated_at : new Date().toISOString();
+      return true;
+    }catch(e){
+      showToast("Không thể lưu dữ liệu lên máy chủ.", true);
+      return false;
+    }
   }
   function save(){ persistState('employees', state.employees); }
-  function saveJobTitles(){ persistState('jobTitles', state.jobTitles); }
+
+  // ====== HÀM LƯU AN TOÀN DUY NHẤT, DÙNG CHUNG CHO TOÀN BỘ DỮ LIỆU ======
+  // Cơ chế "so sánh trước khi ghi" (compare-and-swap): chỉ ghi thành công nếu dữ liệu trên máy chủ
+  // CHƯA thay đổi kể từ lúc mình vừa đọc. Nếu có ai (kể cả 1 tiến trình khác của chính app) vừa ghi
+  // trước mình trong lúc mình đang xử lý, sẽ tự động đọc lại bản mới nhất và áp lại thay đổi — không
+  // bao giờ có chuyện 2 lần ghi cùng lúc đè mất nhau, kể cả khi xảy ra gần như đồng thời.
+  async function mutateStateKeySafe(key, mutateFn, maxRetries){
+    maxRetries = maxRetries || 6;
+    for(var attempt = 0; attempt < maxRetries; attempt++){
+      try{
+        var res = await window.supabaseClient.from('app_state').select('data,updated_at').eq('key', key).maybeSingle();
+        var raw = (res.data && res.data.data !== undefined && res.data.data !== null) ? res.data.data : null;
+        var knownUpdatedAt = res.data ? res.data.updated_at : null;
+        var fresh = raw !== null ? raw : (Array.isArray(APP_STATE_DEFAULTS[key]) ? [] : {});
+
+        var result = mutateFn(fresh);
+        if(result === false) return false; // mutateFn tự huỷ (vd phát hiện trùng dữ liệu mới nhất) — đã tự báo lỗi
+
+        var nowIso = new Date().toISOString();
+        if(knownUpdatedAt === null){
+          // Chưa từng có dòng này trong database -> tạo mới
+          var insertRes = await window.supabaseClient.from('app_state').insert({ key: key, data: fresh, updated_at: nowIso }).select('updated_at').single();
+          if(insertRes.error){ continue; } // ai đó vừa tạo trước mình -> thử lại vòng sau với dữ liệu mới nhất
+          state[key] = fresh;
+          lastKnownUpdatedAt[key] = insertRes.data ? insertRes.data.updated_at : nowIso;
+          return true;
+        } else {
+          // Chỉ ghi nếu updated_at trên máy chủ vẫn còn đúng như lúc mình vừa đọc (chưa ai ghi đè trước mình)
+          var updateRes = await window.supabaseClient.from('app_state')
+            .update({ data: fresh, updated_at: nowIso })
+            .eq('key', key).eq('updated_at', knownUpdatedAt)
+            .select('updated_at');
+          if(updateRes.error) throw updateRes.error;
+          if(!updateRes.data || updateRes.data.length === 0){
+            continue; // có người/tiến trình khác vừa ghi trước mình -> đọc lại bản mới nhất, thử lại
+          }
+          state[key] = fresh;
+          lastKnownUpdatedAt[key] = updateRes.data[0].updated_at;
+          return true;
+        }
+      }catch(e){
+        if(attempt === maxRetries - 1){
+          showToast('Không lưu được dữ liệu lên máy chủ — kiểm tra kết nối mạng và thử lại.', true);
+          return false;
+        }
+      }
+    }
+    showToast('Có quá nhiều thay đổi diễn ra cùng lúc — vui lòng thử lại thao tác.', true);
+    return false;
+  }
+
+  // Các hàm dưới đây giữ lại để không phải sửa hàng chục nơi gọi — đều dùng chung cơ chế an toàn ở trên.
+  function saveEmployeesMutation(mutateFn){ return mutateStateKeySafe('employees', mutateFn); }
+  function saveEmployeeScheduleStatusMutation(mutateFn){ return mutateStateKeySafe('employeeScheduleStatus', mutateFn); }
+  async function saveScheduleMutation(mutateFn){
+    var ok = await mutateStateKeySafe('schedule', mutateFn);
+    renderScheduleMain();
+    return ok;
+  }
   function saveShifts(){ persistState('shifts', state.shifts); }
   function saveSalaryAllocations(){ persistState('salaryAllocations', state.salaryAllocations); }
   function saveStores(){ persistState('stores', state.stores); }
@@ -2245,12 +2320,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     diaChi:'f_diaChi', nganHang:'f_nganHang'
   };
 
-  empForm.addEventListener('submit', function(ev){
+  empForm.addEventListener('submit', async function(ev){
     ev.preventDefault();
     clearFormErrors();
     var fd = new FormData(empForm);
     var data = {};
     fd.forEach(function(v,k){ data[k] = typeof v === 'string' ? v.trim() : v; });
+    if(data.hoTen) data.hoTen = data.hoTen.toUpperCase();
 
     var errors = validateForm(data);
     if(Object.keys(errors).length){
@@ -2263,24 +2339,72 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return;
     }
 
-    if(state.editingId){
-      var idx = state.employees.findIndex(function(x){ return x.id === state.editingId; });
-      data.capNhatLuc = new Date().toISOString();
-      state.employees[idx] = Object.assign({}, state.employees[idx], data);
-      showToast('Đã cập nhật thông tin nhân viên.');
+    var isEdit = !!state.editingId;
+    var editingId = state.editingId;
+    data.capNhatLuc = new Date().toISOString();
+    if(isEdit){
+      data.id = editingId;
     } else {
       data.id = uid();
-      data.capNhatLuc = new Date().toISOString();
-      state.employees.push(data);
-      showToast('Đã thêm nhân viên mới.');
     }
-    save();
+
+    var submitBtn = empForm.querySelector('button[type="submit"]');
+    if(submitBtn){ submitBtn.disabled = true; }
+
+    var ok = await saveEmployeesMutation(function(fresh){
+      // Kiểm tra lại trùng lặp với dữ liệu MỚI NHẤT (đề phòng người khác vừa thêm/sửa đúng lúc này) —
+      // không chỉ dựa vào dữ liệu lúc mở form, để không bao giờ có 2 nhân viên trùng Mã NV/SĐT/CCCD/STK.
+      var conflictField = null, conflictMsg = '';
+      var dupMaNV = fresh.find(function(x){ return x.id !== editingId && x.maNV && x.maNV.toLowerCase() === (data.maNV||'').toLowerCase(); });
+      if(dupMaNV){ conflictField = 'maNV'; conflictMsg = 'Mã NV "'+data.maNV+'" vừa được người khác dùng — đổi mã khác rồi lưu lại.'; }
+      if(!conflictField && data.sdt){
+        var dupSdt2 = fresh.find(function(x){ return x.id !== editingId && x.sdt && x.sdt.toLowerCase() === data.sdt.toLowerCase(); });
+        if(dupSdt2){ conflictField = 'sdt'; conflictMsg = 'SĐT này vừa được người khác dùng cho nhân viên '+dupSdt2.maNV+' — kiểm tra lại rồi lưu lại.'; }
+      }
+      if(!conflictField && data.cmndCccd){
+        var dupCmnd2 = fresh.find(function(x){ return x.id !== editingId && x.cmndCccd && x.cmndCccd.toLowerCase() === data.cmndCccd.toLowerCase(); });
+        if(dupCmnd2){ conflictField = 'cmndCccd'; conflictMsg = 'CMND/CCCD này vừa được người khác dùng cho nhân viên '+dupCmnd2.maNV+' — kiểm tra lại rồi lưu lại.'; }
+      }
+      if(!conflictField && data.stk){
+        var dupStk2 = fresh.find(function(x){ return x.id !== editingId && x.stk && x.stk.toLowerCase() === data.stk.toLowerCase(); });
+        if(dupStk2){ conflictField = 'stk'; conflictMsg = 'STK này vừa được người khác dùng cho nhân viên '+dupStk2.maNV+' — kiểm tra lại rồi lưu lại.'; }
+      }
+      if(conflictField){
+        var errEl2 = document.getElementById(FORM_ERR_ID[conflictField]);
+        if(errEl2) errEl2.textContent = conflictMsg;
+        var inputEl2 = document.getElementById(FORM_INPUT_ID[conflictField]);
+        if(inputEl2) inputEl2.classList.add('invalid');
+        showToast(conflictMsg, true);
+        return false;
+      }
+
+      if(isEdit){
+        var idx = fresh.findIndex(function(x){ return x.id === editingId; });
+        if(idx !== -1) fresh[idx] = Object.assign({}, fresh[idx], data);
+        else fresh.push(data); // phòng trường hợp bị người khác xoá — vẫn thêm lại cho chắc
+      } else {
+        fresh.push(data);
+      }
+    });
+
+    if(submitBtn){ submitBtn.disabled = false; }
+    if(!ok) return; // lỗi đã báo trong hàm — giữ nguyên form để thử lưu lại, không mất dữ liệu đang nhập
+
+    showToast(isEdit ? 'Đã cập nhật thông tin nhân viên.' : 'Đã thêm nhân viên mới.');
     renderAll();
     if(state.currentView === 'schedule'){ renderScheduleSidebar(); renderScheduleMain(); }
     closeForm();
   });
 
   document.getElementById('btnAdd').addEventListener('click', function(){ openForm(null); });
+  (function(){
+    var hoTenInput = document.getElementById('f_hoTen');
+    hoTenInput.addEventListener('input', function(){
+      var pos = hoTenInput.selectionStart;
+      hoTenInput.value = hoTenInput.value.toUpperCase();
+      hoTenInput.setSelectionRange(pos, pos);
+    });
+  })();
   document.getElementById('btnAddEmployeeFromSchedule').addEventListener('click', function(){
     openForm(null);
     if(state.scheduleSelectedStore){
@@ -2341,7 +2465,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(!e) return;
     state.deletingId = id;
     document.getElementById('confirmText').innerHTML =
-      'Bạn có chắc muốn xóa nhân viên <b>' + escapeHtml(e.hoTen || e.maNV) + '</b> (' + escapeHtml(e.maNV) + ')? Hành động này không thể hoàn tác.';
+      'Bạn có chắc muốn xóa nhân viên <b>' + escapeHtml(e.hoTen || e.maNV) + '</b> (' + escapeHtml(e.maNV) + ')? ' +
+      '<br><br><b>Hành động này sẽ xoá VĨNH VIỄN toàn bộ hồ sơ, lịch làm việc và lịch sử chấm công của người này — không thể hoàn tác.</b> ' +
+      'Nếu chỉ muốn đánh dấu nghỉ việc (vẫn giữ lịch sử cũ), hãy Hủy và đổi Trạng thái thành "Nghỉ việc" trong hồ sơ thay vì xoá.';
     confirmOverlay.classList.add('show');
   }
   function closeConfirm(){
@@ -2351,12 +2477,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('confirmClose').addEventListener('click', closeConfirm);
   document.getElementById('confirmCancel').addEventListener('click', closeConfirm);
   confirmOverlay.addEventListener('click', function(ev){ if(ev.target === confirmOverlay) closeConfirm(); });
-  document.getElementById('confirmDelete').addEventListener('click', function(){
+  document.getElementById('confirmDelete').addEventListener('click', async function(){
     if(!state.deletingId) return;
-    state.employees = state.employees.filter(function(x){ return x.id !== state.deletingId; });
-    save();
+    var deletingId = state.deletingId;
+    var deletingEmp = state.employees.find(function(x){ return x.id === deletingId; });
+    var deletingMaNV = deletingEmp ? deletingEmp.maNV : null;
+
+    var ok = await saveEmployeesMutation(function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === deletingId; });
+      if(idx !== -1) fresh.splice(idx, 1);
+    });
+    if(!ok) return;
+
+    if(deletingMaNV){
+      var prefix = deletingMaNV + '|';
+      await saveScheduleMutation(function(fresh){
+        Object.keys(fresh).forEach(function(k){
+          if(k.indexOf(prefix) === 0) delete fresh[k];
+        });
+      });
+      await saveEmployeeScheduleStatusMutation(function(fresh){
+        delete fresh[deletingMaNV];
+      });
+    }
+
     renderAll();
-    showToast('Đã xóa nhân viên.');
+    showToast('Đã xóa nhân viên và toàn bộ lịch sử liên quan.');
     closeConfirm();
   });
 
@@ -2585,30 +2731,31 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return errors;
   }
 
-  function commitImport(records){
+  async function commitImport(records){
     var added = 0, updated = 0;
-    var byMaNV = {};
-    var now = new Date().toISOString();
-    state.employees.forEach(function(e){ byMaNV[e.maNV.toLowerCase()] = e; });
-    records.forEach(function(r){
-      var key = r.maNV.toLowerCase();
-      var payload = {
-        maNV:r.maNV, hoTen:r.hoTen, hoKinhDoanh:r.hoKinhDoanh, chiNhanh:r.chiNhanh, chucDanh:r.chucDanh,
-        ngayVaoLam:r.ngayVaoLam, ngaySinh:r.ngaySinh, sdt:r.sdt, cmndCccd:r.cmndCccd, stk:r.stk,
-        nganHang:r.nganHang, diaChi:r.diaChi, mucLuong:r.mucLuong, trangThai:r.trangThai,
-        capNhatLuc: now
-      };
-      if(byMaNV[key]){
-        Object.assign(byMaNV[key], payload);
-        updated++;
-      } else {
-        payload.id = uid();
-        state.employees.push(payload);
-        byMaNV[key] = payload;
-        added++;
-      }
+    await mutateStateKeySafe('employees', function(fresh){
+      var byMaNV = {};
+      var now = new Date().toISOString();
+      fresh.forEach(function(e){ byMaNV[e.maNV.toLowerCase()] = e; });
+      records.forEach(function(r){
+        var key = r.maNV.toLowerCase();
+        var payload = {
+          maNV:r.maNV, hoTen:r.hoTen, hoKinhDoanh:r.hoKinhDoanh, chiNhanh:r.chiNhanh, chucDanh:r.chucDanh,
+          ngayVaoLam:r.ngayVaoLam, ngaySinh:r.ngaySinh, sdt:r.sdt, cmndCccd:r.cmndCccd, stk:r.stk,
+          nganHang:r.nganHang, diaChi:r.diaChi, mucLuong:r.mucLuong, trangThai:r.trangThai,
+          capNhatLuc: now
+        };
+        if(byMaNV[key]){
+          Object.assign(byMaNV[key], payload);
+          updated++;
+        } else {
+          payload.id = uid();
+          fresh.push(payload);
+          byMaNV[key] = payload;
+          added++;
+        }
+      });
     });
-    save();
     renderAll();
     showToast('Đã thêm mới ' + added + ' nhân viên, cập nhật ' + updated + ' nhân viên đã có.');
   }
@@ -2649,6 +2796,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   });
 
   /* ---------- View switching ---------- */
+  function renderViewContent(view){
+    if(view === 'jobTitles'){ renderStoreTable(); renderTaskTable(); renderJobTitleTable(); renderShiftTable(); }
+    if(view === 'salary'){ renderSalaryTable(); }
+    if(view === 'schedule'){ renderScheduleSidebar(); renderScheduleMain(); }
+    if(view === 'tinhCong'){ renderTinhCong(); }
+    if(view === 'phanQuyen'){ renderPermissionTable(); }
+  }
   function switchView(view){
     state.currentView = view;
     document.getElementById('viewEmployees').style.display = view === 'employees' ? '' : 'none';
@@ -2663,11 +2817,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('tabSchedule').classList.toggle('active', view === 'schedule');
     document.getElementById('tabTinhCong').classList.toggle('active', view === 'tinhCong');
     document.getElementById('tabPhanQuyen').classList.toggle('active', view === 'phanQuyen');
-    if(view === 'jobTitles'){ renderStoreTable(); renderTaskTable(); renderJobTitleTable(); renderShiftTable(); }
-    if(view === 'salary'){ renderSalaryTable(); }
-    if(view === 'schedule'){ renderScheduleSidebar(); renderScheduleMain(); }
-    if(view === 'tinhCong'){ renderTinhCong(); }
-    if(view === 'phanQuyen'){ renderPermissionTable(); }
+    renderViewContent(view);
   }
   document.getElementById('tabEmployees').addEventListener('click', function(){ switchView('employees'); });
   document.getElementById('tabJobTitles').addEventListener('click', function(){ switchView('jobTitles'); });
@@ -2833,16 +2983,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.querySelectorAll('.pf-tab').forEach(function(cb){ tabs[cb.value] = cb.checked; });
     var stores = [];
     document.querySelectorAll('.pf-store:checked').forEach(function(cb){ stores.push(cb.value); });
-    state.userPermissions[finalUsername] = { tabs: tabs, stores: stores };
-    saveUserPermissions();
+    var permOk = await mutateStateKeySafe('userPermissions', function(fresh){
+      fresh[finalUsername] = { tabs: tabs, stores: stores };
+    });
+    if(!permOk) return;
     closePermForm();
     renderPermissionTable();
     showToast(pfEditingUsername ? ('Đã lưu phân quyền cho ' + finalUsername + '.') : ('Đã tạo tài khoản và phân quyền cho ' + finalUsername + '.'));
   });
-  document.getElementById('permFormDelete').addEventListener('click', function(){
+  document.getElementById('permFormDelete').addEventListener('click', async function(){
     if(!pfEditingUsername) return;
-    delete state.userPermissions[pfEditingUsername];
-    saveUserPermissions();
+    var deletingUsername = pfEditingUsername;
+    var ok = await mutateStateKeySafe('userPermissions', function(fresh){
+      delete fresh[deletingUsername];
+    });
+    if(!ok) return;
     closePermForm();
     renderPermissionTable();
     showToast('Đã xóa phân quyền.');
@@ -3028,7 +3183,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var ST_ERR_ID = {tenCuaHang:'e_st_tenCuaHang', quanLyTrucTiep:'e_st_quanLy'};
   var ST_INPUT_ID = {tenCuaHang:'st_tenCuaHang', quanLyTrucTiep:'st_quanLy'};
 
-  storeForm.addEventListener('submit', function(ev){
+  storeForm.addEventListener('submit', async function(ev){
     ev.preventDefault();
     clearStoreFormErrors();
     var fd = new FormData(storeForm);
@@ -3050,16 +3205,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       capNhatLuc: new Date().toISOString()
     };
 
-    if(state.stEditingId){
-      var idx = state.stores.findIndex(function(x){ return x.id === state.stEditingId; });
-      state.stores[idx] = Object.assign({}, state.stores[idx], payload);
-      showToast('Đã cập nhật cửa hàng.');
-    } else {
-      payload.id = uid();
-      state.stores.push(payload);
-      showToast('Đã thêm cửa hàng mới.');
-    }
-    saveStores();
+    var isEdit = !!state.stEditingId;
+    var editingId = state.stEditingId;
+    if(!isEdit) payload.id = uid();
+
+    var ok = await mutateStateKeySafe('stores', function(fresh){
+      var dup = fresh.find(function(x){ return x.id !== editingId && x.tenCuaHang.toLowerCase() === payload.tenCuaHang.toLowerCase(); });
+      if(dup){
+        document.getElementById(ST_ERR_ID.tenCuaHang).textContent = 'Tên cửa hàng này vừa được người khác dùng — đổi tên khác rồi lưu lại.';
+        document.getElementById(ST_INPUT_ID.tenCuaHang).classList.add('invalid');
+        return false;
+      }
+      if(isEdit){
+        var idx = fresh.findIndex(function(x){ return x.id === editingId; });
+        if(idx !== -1) fresh[idx] = Object.assign({}, fresh[idx], payload);
+        else fresh.push(payload);
+      } else {
+        fresh.push(payload);
+      }
+    });
+    if(!ok) return;
+
+    showToast(isEdit ? 'Đã cập nhật cửa hàng.' : 'Đã thêm cửa hàng mới.');
     renderStoreTable();
     closeStoreForm();
   });
@@ -3092,10 +3259,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('storeConfirmClose').addEventListener('click', closeStoreConfirm);
   document.getElementById('storeConfirmCancel').addEventListener('click', closeStoreConfirm);
   storeConfirmOverlay.addEventListener('click', function(ev){ if(ev.target === storeConfirmOverlay) closeStoreConfirm(); });
-  document.getElementById('storeConfirmDelete').addEventListener('click', function(){
+  document.getElementById('storeConfirmDelete').addEventListener('click', async function(){
     if(!state.stDeletingId) return;
-    state.stores = state.stores.filter(function(x){ return x.id !== state.stDeletingId; });
-    saveStores();
+    var deletingId = state.stDeletingId;
+    var ok = await mutateStateKeySafe('stores', function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === deletingId; });
+      if(idx !== -1) fresh.splice(idx, 1);
+    });
+    if(!ok) return;
     renderStoreTable();
     showToast('Đã xóa cửa hàng.');
     closeStoreConfirm();
@@ -3242,7 +3413,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var TK_ERR_ID = {tenCongViec:'e_tk_tenCongViec', mau:'e_tk_mau'};
   var TK_INPUT_ID = {tenCongViec:'tk_tenCongViec', mau:'tk_mauHex'};
 
-  taskForm.addEventListener('submit', function(ev){
+  taskForm.addEventListener('submit', async function(ev){
     ev.preventDefault();
     clearTaskFormErrors();
     var data = {
@@ -3262,16 +3433,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       mau: data.mauHex,
       capNhatLuc: new Date().toISOString()
     };
-    if(state.tkEditingId){
-      var idx = state.tasks.findIndex(function(x){ return x.id === state.tkEditingId; });
-      state.tasks[idx] = Object.assign({}, state.tasks[idx], payload);
-      showToast('Đã cập nhật công việc.');
-    } else {
-      payload.id = uid();
-      state.tasks.push(payload);
-      showToast('Đã thêm công việc mới.');
-    }
-    saveTasks();
+    var isEdit = !!state.tkEditingId;
+    var editingId = state.tkEditingId;
+    if(!isEdit) payload.id = uid();
+
+    var ok = await mutateStateKeySafe('tasks', function(fresh){
+      var dup = fresh.find(function(x){ return x.id !== editingId && x.tenCongViec.toLowerCase() === payload.tenCongViec.toLowerCase(); });
+      if(dup){
+        document.getElementById(TK_ERR_ID.tenCongViec).textContent = 'Công việc này vừa được người khác thêm — đổi tên khác rồi lưu lại.';
+        document.getElementById(TK_INPUT_ID.tenCongViec).classList.add('invalid');
+        return false;
+      }
+      if(isEdit){
+        var idx = fresh.findIndex(function(x){ return x.id === editingId; });
+        if(idx !== -1) fresh[idx] = Object.assign({}, fresh[idx], payload);
+        else fresh.push(payload);
+      } else {
+        fresh.push(payload);
+      }
+    });
+    if(!ok) return;
+
+    showToast(isEdit ? 'Đã cập nhật công việc.' : 'Đã thêm công việc mới.');
     renderTaskTable();
     closeTaskForm();
   });
@@ -3304,22 +3487,26 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('taskConfirmClose').addEventListener('click', closeTaskConfirm);
   document.getElementById('taskConfirmCancel').addEventListener('click', closeTaskConfirm);
   taskConfirmOverlay.addEventListener('click', function(ev){ if(ev.target === taskConfirmOverlay) closeTaskConfirm(); });
-  document.getElementById('taskConfirmDelete').addEventListener('click', function(){
+  document.getElementById('taskConfirmDelete').addEventListener('click', async function(){
     if(!state.tkDeletingId) return;
-    var removedName = (state.tasks.find(function(x){ return x.id === state.tkDeletingId; }) || {}).tenCongViec;
-    state.tasks = state.tasks.filter(function(x){ return x.id !== state.tkDeletingId; });
+    var deletingId = state.tkDeletingId;
+    var removedName = (state.tasks.find(function(x){ return x.id === deletingId; }) || {}).tenCongViec;
+    var ok = await mutateStateKeySafe('tasks', function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === deletingId; });
+      if(idx !== -1) fresh.splice(idx, 1);
+    });
+    if(!ok) return;
     if(removedName){
-      var changed = false;
-      Object.keys(state.schedule).forEach(function(key){
-        var entry = state.schedule[key];
-        if(!entry || !Array.isArray(entry.shifts)) return;
-        entry.shifts.forEach(function(s){
-          if(s && typeof s === 'object' && s.task === removedName){ s.task = ''; changed = true; }
+      await saveScheduleMutation(function(fresh){
+        Object.keys(fresh).forEach(function(key){
+          var entry = fresh[key];
+          if(!entry || !Array.isArray(entry.shifts)) return;
+          entry.shifts.forEach(function(s){
+            if(s && typeof s === 'object' && s.task === removedName){ s.task = ''; }
+          });
         });
       });
-      if(changed) saveSchedule();
     }
-    saveTasks();
     renderTaskTable();
     showToast('Đã xóa công việc.');
     closeTaskConfirm();
@@ -3460,7 +3647,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var JT_ERR_ID = {chucDanh:'e_jt_chucDanh', gioChuanNgay:'e_jt_gioChuan', otPerGio:'e_jt_ot', tiLeThuong:'e_jt_tile', soNgayNghi:'e_jt_ngayNghi'};
   var JT_INPUT_ID = {chucDanh:'jt_chucDanh', gioChuanNgay:'jt_gioChuan', otPerGio:'jt_ot', tiLeThuong:'jt_tile', soNgayNghi:'jt_ngayNghi'};
 
-  jobTitleForm.addEventListener('submit', function(ev){
+  jobTitleForm.addEventListener('submit', async function(ev){
     ev.preventDefault();
     clearJobTitleFormErrors();
     var fd = new FormData(jobTitleForm);
@@ -3485,16 +3672,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       capNhatLuc: new Date().toISOString()
     };
 
-    if(state.jtEditingId){
-      var idx = state.jobTitles.findIndex(function(x){ return x.id === state.jtEditingId; });
-      state.jobTitles[idx] = Object.assign({}, state.jobTitles[idx], payload);
-      showToast('Đã cập nhật chức danh.');
-    } else {
-      payload.id = uid();
-      state.jobTitles.push(payload);
-      showToast('Đã thêm chức danh mới.');
-    }
-    saveJobTitles();
+    var isEdit = !!state.jtEditingId;
+    var editingId = state.jtEditingId;
+    if(!isEdit) payload.id = uid();
+
+    var ok = await mutateStateKeySafe('jobTitles', function(fresh){
+      var dup = fresh.find(function(x){ return x.id !== editingId && x.chucDanh.toLowerCase() === payload.chucDanh.toLowerCase(); });
+      if(dup){
+        document.getElementById(JT_ERR_ID.chucDanh).textContent = 'Chức danh này vừa được người khác thêm — đổi tên khác rồi lưu lại.';
+        document.getElementById(JT_INPUT_ID.chucDanh).classList.add('invalid');
+        return false;
+      }
+      if(isEdit){
+        var idx = fresh.findIndex(function(x){ return x.id === editingId; });
+        if(idx !== -1) fresh[idx] = Object.assign({}, fresh[idx], payload);
+        else fresh.push(payload);
+      } else {
+        fresh.push(payload);
+      }
+    });
+    if(!ok) return;
+
+    showToast(isEdit ? 'Đã cập nhật chức danh.' : 'Đã thêm chức danh mới.');
     renderJobTitleTable();
     renderFilterOptions();
     closeJobTitleForm();
@@ -3528,10 +3727,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('jobTitleConfirmClose').addEventListener('click', closeJobTitleConfirm);
   document.getElementById('jobTitleConfirmCancel').addEventListener('click', closeJobTitleConfirm);
   jobTitleConfirmOverlay.addEventListener('click', function(ev){ if(ev.target === jobTitleConfirmOverlay) closeJobTitleConfirm(); });
-  document.getElementById('jobTitleConfirmDelete').addEventListener('click', function(){
+  document.getElementById('jobTitleConfirmDelete').addEventListener('click', async function(){
     if(!state.jtDeletingId) return;
-    state.jobTitles = state.jobTitles.filter(function(x){ return x.id !== state.jtDeletingId; });
-    saveJobTitles();
+    var deletingId = state.jtDeletingId;
+    var ok = await mutateStateKeySafe('jobTitles', function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === deletingId; });
+      if(idx !== -1) fresh.splice(idx, 1);
+    });
+    if(!ok) return;
     renderJobTitleTable();
     showToast('Đã xóa chức danh.');
     closeJobTitleConfirm();
@@ -3691,7 +3894,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var SF_ERR_ID = {maCa:'e_sf_maCa', tenCa:'e_sf_tenCa', batDau:'e_sf_batDau', ketThuc:'e_sf_ketThuc', loaiCa:'e_sf_loaiCa'};
   var SF_INPUT_ID = {maCa:'sf_maCa', tenCa:'sf_tenCa', batDau:'sf_batDau', ketThuc:'sf_ketThuc', loaiCa:'sf_loaiCa'};
 
-  shiftForm.addEventListener('submit', function(ev){
+  shiftForm.addEventListener('submit', async function(ev){
     ev.preventDefault();
     clearShiftFormErrors();
     var fd = new FormData(shiftForm);
@@ -3717,16 +3920,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       capNhatLuc: new Date().toISOString()
     };
 
-    if(state.sfEditingId){
-      var idx = state.shifts.findIndex(function(x){ return x.id === state.sfEditingId; });
-      state.shifts[idx] = Object.assign({}, state.shifts[idx], payload);
-      showToast('Đã cập nhật ca làm việc.');
-    } else {
-      payload.id = uid();
-      state.shifts.push(payload);
-      showToast('Đã thêm ca làm việc mới.');
-    }
-    saveShifts();
+    var isEdit = !!state.sfEditingId;
+    var editingId = state.sfEditingId;
+    if(!isEdit) payload.id = uid();
+
+    var ok = await mutateStateKeySafe('shifts', function(fresh){
+      var dup = fresh.find(function(x){ return x.id !== editingId && x.maCa.toLowerCase() === payload.maCa.toLowerCase(); });
+      if(dup){
+        document.getElementById(SF_ERR_ID.maCa).textContent = 'Mã ca này vừa được người khác dùng — đổi mã khác rồi lưu lại.';
+        document.getElementById(SF_INPUT_ID.maCa).classList.add('invalid');
+        return false;
+      }
+      if(isEdit){
+        var idx = fresh.findIndex(function(x){ return x.id === editingId; });
+        if(idx !== -1) fresh[idx] = Object.assign({}, fresh[idx], payload);
+        else fresh.push(payload);
+      } else {
+        fresh.push(payload);
+      }
+    });
+    if(!ok) return;
+
+    showToast(isEdit ? 'Đã cập nhật ca làm việc.' : 'Đã thêm ca làm việc mới.');
     renderShiftTable();
     closeShiftForm();
   });
@@ -3759,10 +3974,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('shiftConfirmClose').addEventListener('click', closeShiftConfirm);
   document.getElementById('shiftConfirmCancel').addEventListener('click', closeShiftConfirm);
   shiftConfirmOverlay.addEventListener('click', function(ev){ if(ev.target === shiftConfirmOverlay) closeShiftConfirm(); });
-  document.getElementById('shiftConfirmDelete').addEventListener('click', function(){
+  document.getElementById('shiftConfirmDelete').addEventListener('click', async function(){
     if(!state.sfDeletingId) return;
-    state.shifts = state.shifts.filter(function(x){ return x.id !== state.sfDeletingId; });
-    saveShifts();
+    var deletingId = state.sfDeletingId;
+    var ok = await mutateStateKeySafe('shifts', function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === deletingId; });
+      if(idx !== -1) fresh.splice(idx, 1);
+    });
+    if(!ok) return;
     renderShiftTable();
     showToast('Đã xóa ca làm việc.');
     closeShiftConfirm();
@@ -3818,7 +4037,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     reader.readAsArrayBuffer(file);
   });
 
-  function processShiftImport(rows){
+  async function processShiftImport(rows){
     if(!rows || rows.length === 0){ showToast('File không có dữ liệu.', true); return; }
     var records = [];
     rows.forEach(function(row, idx){
@@ -3852,7 +4071,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       showImportErrors(errors);
       return;
     }
-    commitShiftImport(records);
+    await commitShiftImport(records);
   }
 
   function validateShiftImportBatch(records){
@@ -3885,28 +4104,29 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return errors;
   }
 
-  function commitShiftImport(records){
+  async function commitShiftImport(records){
     var added = 0, updated = 0;
-    var byMaCa = {};
-    var now = new Date().toISOString();
-    state.shifts.forEach(function(s){ byMaCa[s.maCa.toLowerCase()] = s; });
-    records.forEach(function(r){
-      var key = r.maCa.toLowerCase();
-      var payload = {
-        maCa:r.maCa, tenCa:r.tenCa, batDau:r.batDau, ketThuc:r.ketThuc, gio:r.gio, loaiCa:r.loaiCa,
-        capNhatLuc: now
-      };
-      if(byMaCa[key]){
-        Object.assign(byMaCa[key], payload);
-        updated++;
-      } else {
-        payload.id = uid();
-        state.shifts.push(payload);
-        byMaCa[key] = payload;
-        added++;
-      }
+    await mutateStateKeySafe('shifts', function(fresh){
+      var byMaCa = {};
+      var now = new Date().toISOString();
+      fresh.forEach(function(s){ byMaCa[s.maCa.toLowerCase()] = s; });
+      records.forEach(function(r){
+        var key = r.maCa.toLowerCase();
+        var payload = {
+          maCa:r.maCa, tenCa:r.tenCa, batDau:r.batDau, ketThuc:r.ketThuc, gio:r.gio, loaiCa:r.loaiCa,
+          capNhatLuc: now
+        };
+        if(byMaCa[key]){
+          Object.assign(byMaCa[key], payload);
+          updated++;
+        } else {
+          payload.id = uid();
+          fresh.push(payload);
+          byMaCa[key] = payload;
+          added++;
+        }
+      });
     });
-    saveShifts();
     renderShiftTable();
     showToast('Đã thêm mới ' + added + ' ca, cập nhật ' + updated + ' ca đã có.');
   }
@@ -4116,7 +4336,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
     }
   });
-  document.getElementById('salaryTbody').addEventListener('change', function(ev){
+  document.getElementById('salaryTbody').addEventListener('change', async function(ev){
     var input = ev.target.closest('.cell-input');
     if(!input) return;
     var row = input.closest('tr');
@@ -4124,8 +4344,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var val = input.value === '' ? 0 : Number(input.value);
     if(isNaN(val) || val < 0) val = 0;
     input.value = val;
-    setSalaryField(maNV, input.dataset.field, val);
-    saveSalaryAllocations();
+    var field = input.dataset.field;
+    var key = maNV.toLowerCase();
+    await mutateStateKeySafe('salaryAllocations', function(fresh){
+      if(!fresh[key]) fresh[key] = {};
+      fresh[key][field] = val;
+      fresh[key].capNhatLuc = new Date().toISOString();
+    });
     if(state.salaryFilterStatus){
       renderSalaryTable();
     } else {
@@ -4193,7 +4418,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     reader.readAsArrayBuffer(file);
   });
 
-  function processSalaryImport(rows){
+  async function processSalaryImport(rows){
     if(!rows || rows.length === 0){ showToast('File không có dữ liệu.', true); return; }
     var records = [];
     rows.forEach(function(row, idx){
@@ -4244,18 +4469,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
 
     var updated = 0;
-    records.forEach(function(r){
-      var key = r.maNV.toLowerCase();
-      var payload = {
-        chuyenCan: r.chuyenCan, dienThoai: r.dienThoai, xangXe: r.xangXe,
-        hoTroKiemNhiem: r.hoTroKiemNhiem, kpiKhac: r.kpiKhac,
-        capNhatLuc: new Date().toISOString()
-      };
-      if(r.luongCB !== undefined) payload.luongCB = r.luongCB;
-      state.salaryAllocations[key] = Object.assign({}, state.salaryAllocations[key] || {}, payload);
-      updated++;
+    await mutateStateKeySafe('salaryAllocations', function(fresh){
+      records.forEach(function(r){
+        var key = r.maNV.toLowerCase();
+        var payload = {
+          chuyenCan: r.chuyenCan, dienThoai: r.dienThoai, xangXe: r.xangXe,
+          hoTroKiemNhiem: r.hoTroKiemNhiem, kpiKhac: r.kpiKhac,
+          capNhatLuc: new Date().toISOString()
+        };
+        if(r.luongCB !== undefined) payload.luongCB = r.luongCB;
+        fresh[key] = Object.assign({}, fresh[key] || {}, payload);
+        updated++;
+      });
     });
-    saveSalaryAllocations();
     renderSalaryTable();
     showToast('Đã cập nhật phân bổ lương cho ' + updated + ' nhân viên.');
   }
@@ -4297,13 +4523,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function getEmployeeScheduleStatus(maNV){
     return state.employeeScheduleStatus[maNV] || null;
   }
-  function setEmployeeScheduleStatus(maNV, status, weekStart){
-    if(status === 'Đang làm'){
-      delete state.employeeScheduleStatus[maNV];
-    } else {
-      state.employeeScheduleStatus[maNV] = { status: status, effectiveWeek: weekStart };
-    }
-    saveEmployeeScheduleStatus();
+  async function setEmployeeScheduleStatus(maNV, status, weekStart){
+    await mutateStateKeySafe('employeeScheduleStatus', function(fresh){
+      if(status === 'Đang làm'){
+        delete fresh[maNV];
+      } else {
+        fresh[maNV] = { status: status, effectiveWeek: weekStart };
+      }
+    });
   }
   function isHiddenForWeek(maNV, weekStart){
     var rec = getEmployeeScheduleStatus(maNV);
@@ -4364,12 +4591,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       .filter(Boolean)
       .map(function(e){ return Object.assign({}, e, { _borrowed: true, _borrowedFrom: e.chiNhanh }); });
   }
-  function borrowStaff(maNV, storeName, weekStart){
+  async function borrowStaff(maNV, storeName, weekStart){
     var key = getBorrowKey(storeName, weekStart);
-    var list = state.borrowedStaff[key] || [];
-    if(list.indexOf(maNV) === -1) list.push(maNV);
-    state.borrowedStaff[key] = list;
-    saveBorrowedStaff();
+    await mutateStateKeySafe('borrowedStaff', function(fresh){
+      var list = fresh[key] || [];
+      if(list.indexOf(maNV) === -1) list.push(maNV);
+      fresh[key] = list;
+    });
   }
 
   /* ---------- Schedule: sidebar ---------- */
@@ -4540,7 +4768,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     openScheduleCellModal(btn.dataset.manv, btn.dataset.date);
   });
-  document.getElementById('scheduleStaffTbody').addEventListener('change', function(ev){
+  document.getElementById('scheduleStaffTbody').addEventListener('change', async function(ev){
     var sel = ev.target.closest('.sched-status-select');
     if(!sel) return;
     if(isWeekLocked(state.scheduleSelectedStore, state.scheduleWeekStart)){
@@ -4548,7 +4776,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       renderScheduleMain();
       return;
     }
-    setEmployeeScheduleStatus(sel.dataset.manv, sel.value, state.scheduleWeekStart);
+    await setEmployeeScheduleStatus(sel.dataset.manv, sel.value, state.scheduleWeekStart);
     sel.className = 'sched-status-select status-' + scheduleStatusClass(sel.value);
     showToast(sel.value === 'Đang làm' ? 'Đã cập nhật trạng thái.' : 'Đã cập nhật trạng thái. Từ tuần sau, người này sẽ không còn hiện trong lịch xếp ca.');
   });
@@ -4661,16 +4889,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     openTimelineTaskModal(block.dataset.manv, block.dataset.date, block.dataset.code);
   });
 
-  function setShiftTask(maNV, date, code, taskName){
+  async function setShiftTask(maNV, date, code, taskName){
     var key = scheduleKey(maNV, date);
-    var entry = state.schedule[key];
-    if(!entry || !Array.isArray(entry.shifts)) return;
-    entry.shifts = entry.shifts.map(function(s){
-      var obj = typeof s === 'string' ? {code:s, task:''} : s;
-      if(obj.code === code) obj = Object.assign({}, obj, {task: taskName});
-      return obj;
+    await saveScheduleMutation(function(fresh){
+      var entry = fresh[key];
+      if(!entry || !Array.isArray(entry.shifts)) return;
+      entry.shifts = entry.shifts.map(function(s){
+        var obj = typeof s === 'string' ? {code:s, task:''} : s;
+        if(obj.code === code) obj = Object.assign({}, obj, {task: taskName});
+        return obj;
+      });
     });
-    saveSchedule();
   }
 
   var timelineTaskOverlay = document.getElementById('timelineTaskOverlay');
@@ -4707,11 +4936,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('timelineTaskClose').addEventListener('click', closeTimelineTaskModal);
   document.getElementById('timelineTaskCancel').addEventListener('click', closeTimelineTaskModal);
   timelineTaskOverlay.addEventListener('click', function(ev){ if(ev.target === timelineTaskOverlay) closeTimelineTaskModal(); });
-  document.getElementById('timelineTaskSave').addEventListener('click', function(){
+  document.getElementById('timelineTaskSave').addEventListener('click', async function(){
     if(!state.timelineTaskMaNV) return;
     var val = document.getElementById('timelineTaskSelect').value;
-    setShiftTask(state.timelineTaskMaNV, state.timelineTaskDate, state.timelineTaskCode, val);
-    renderScheduleMain();
+    await setShiftTask(state.timelineTaskMaNV, state.timelineTaskDate, state.timelineTaskCode, val);
     showToast('Đã cập nhật công việc.');
     closeTimelineTaskModal();
   });
@@ -4846,13 +5074,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     setSchedulePickersDisabled(state.scheduleCellOffActive);
     document.getElementById('scheduleCellError').style.display = 'none';
   });
-  document.getElementById('scheduleCellSave').addEventListener('click', function(){
+  document.getElementById('scheduleCellSave').addEventListener('click', async function(){
     if(!state.scheduleCellMaNV) return;
     var key = scheduleKey(state.scheduleCellMaNV, state.scheduleCellDate);
+    var storeForEntry = state.scheduleSelectedStore;
     if(state.scheduleCellOffActive){
-      state.schedule[key] = { store: state.scheduleSelectedStore, off: true };
-      saveSchedule();
-      renderScheduleMain();
+      await saveScheduleMutation(function(fresh){ fresh[key] = { store: storeForEntry, off: true }; });
       showToast('Đã đánh dấu ngày nghỉ.');
       closeScheduleCellModal();
       return;
@@ -4869,21 +5096,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var prev = prevObjs.find(function(o){ return o.code === code; });
         return { code: code, task: prev ? prev.task : '' };
       });
-      state.schedule[key] = { store: state.scheduleSelectedStore, shifts: pickedObjs };
+      await saveScheduleMutation(function(fresh){ fresh[key] = { store: storeForEntry, shifts: pickedObjs }; });
     } else {
-      delete state.schedule[key];
+      await saveScheduleMutation(function(fresh){ delete fresh[key]; });
     }
-    saveSchedule();
-    renderScheduleMain();
     showToast('Đã lưu lịch làm việc.');
     closeScheduleCellModal();
   });
-  document.getElementById('scheduleCellRemove').addEventListener('click', function(){
+  document.getElementById('scheduleCellRemove').addEventListener('click', async function(){
     if(!state.scheduleCellMaNV) return;
     var key = scheduleKey(state.scheduleCellMaNV, state.scheduleCellDate);
-    delete state.schedule[key];
-    saveSchedule();
-    renderScheduleMain();
+    await saveScheduleMutation(function(fresh){ delete fresh[key]; });
     showToast('Đã xóa lịch ngày này.');
     closeScheduleCellModal();
   });
@@ -4963,10 +5186,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     state.borrowSourceStore = ev.target.value;
     renderBorrowStaffList();
   });
-  document.getElementById('borrowStaffList').addEventListener('click', function(ev){
+  document.getElementById('borrowStaffList').addEventListener('click', async function(ev){
     var btn = ev.target.closest('button[data-manv]');
     if(!btn) return;
-    borrowStaff(btn.dataset.manv, state.scheduleSelectedStore, state.scheduleWeekStart);
+    await borrowStaff(btn.dataset.manv, state.scheduleSelectedStore, state.scheduleWeekStart);
     renderBorrowStaffList();
     showToast('Đã mượn nhân sự cho tuần này.');
   });
@@ -5079,26 +5302,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('copyDayClose').addEventListener('click', closeCopyDayModal);
   document.getElementById('copyDayCancel').addEventListener('click', closeCopyDayModal);
   copyDayOverlay.addEventListener('click', function(ev){ if(ev.target === copyDayOverlay) closeCopyDayModal(); });
-  document.getElementById('copyDayConfirm').addEventListener('click', function(){
+  document.getElementById('copyDayConfirm').addEventListener('click', async function(){
     if(!copyDaySourceDate) return;
     var targets = Array.prototype.slice.call(document.querySelectorAll('.copy-day-target-cb:checked')).map(function(cb){ return cb.value; });
     if(targets.length === 0){ closeCopyDayModal(); return; }
     var validStaff = getStoreEmployees(state.scheduleSelectedStore)
       .filter(function(e){ return !isHiddenForWeek(e.maNV, state.scheduleWeekStart); });
-    validStaff.forEach(function(e){
-      var fromEntry = getScheduleEntry(e.maNV, copyDaySourceDate);
-      if(!fromEntry || fromEntry.store !== state.scheduleSelectedStore) return;
-      targets.forEach(function(toDate){
-        state.schedule[scheduleKey(e.maNV, toDate)] = JSON.parse(JSON.stringify(fromEntry));
+    var sourceDate = copyDaySourceDate;
+    var storeForCopy = state.scheduleSelectedStore;
+    await saveScheduleMutation(function(fresh){
+      validStaff.forEach(function(e){
+        var fromEntry = fresh[scheduleKey(e.maNV, sourceDate)];
+        if(!fromEntry || fromEntry.store !== storeForCopy) return;
+        targets.forEach(function(toDate){
+          fresh[scheduleKey(e.maNV, toDate)] = JSON.parse(JSON.stringify(fromEntry));
+        });
       });
     });
-    saveSchedule();
     closeCopyDayModal();
-    renderScheduleMain();
   });
 
   /* ---------- Schedule: copy previous week ---------- */
-  document.getElementById('btnCopyPrevWeek').addEventListener('click', function(){
+  document.getElementById('btnCopyPrevWeek').addEventListener('click', async function(){
     if(!state.scheduleSelectedStore) return;
     if(isWeekLocked(state.scheduleSelectedStore, state.scheduleWeekStart)){
       showToast('Tuần này đã chốt công, không thể sao chép vào.', true);
@@ -5107,23 +5332,25 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var prevWeekStart = addDaysISO(state.scheduleWeekStart, -7);
     var validStaff = getStoreEmployees(state.scheduleSelectedStore)
       .filter(function(e){ return !isHiddenForWeek(e.maNV, state.scheduleWeekStart); });
+    var weekStart = state.scheduleWeekStart;
+    var storeForCopy = state.scheduleSelectedStore;
     var copyCount = 0;
-    validStaff.forEach(function(e){
-      for(var i=0;i<7;i++){
-        var fromDate = addDaysISO(prevWeekStart, i);
-        var toDate = addDaysISO(state.scheduleWeekStart, i);
-        var fromEntry = getScheduleEntry(e.maNV, fromDate);
-        if(!fromEntry || fromEntry.store !== state.scheduleSelectedStore) continue;
-        state.schedule[scheduleKey(e.maNV, toDate)] = JSON.parse(JSON.stringify(fromEntry));
-        copyCount++;
-      }
+    await saveScheduleMutation(function(fresh){
+      validStaff.forEach(function(e){
+        for(var i=0;i<7;i++){
+          var fromDate = addDaysISO(prevWeekStart, i);
+          var toDate = addDaysISO(weekStart, i);
+          var fromEntry = fresh[scheduleKey(e.maNV, fromDate)];
+          if(!fromEntry || fromEntry.store !== storeForCopy) continue;
+          fresh[scheduleKey(e.maNV, toDate)] = JSON.parse(JSON.stringify(fromEntry));
+          copyCount++;
+        }
+      });
     });
     if(copyCount === 0){
       showToast('Tuần trước chưa có lịch nào để sao chép.', true);
       return;
     }
-    saveSchedule();
-    renderScheduleMain();
   });
 
   /* ---------- Schedule: lock (Chốt công) ---------- */
@@ -5142,10 +5369,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('lockScheduleClose').addEventListener('click', closeLockScheduleModal);
   document.getElementById('lockScheduleCancel').addEventListener('click', closeLockScheduleModal);
   lockScheduleOverlay.addEventListener('click', function(ev){ if(ev.target === lockScheduleOverlay) closeLockScheduleModal(); });
-  document.getElementById('lockScheduleConfirm').addEventListener('click', function(){
+  document.getElementById('lockScheduleConfirm').addEventListener('click', async function(){
     var key = getBorrowKey(state.scheduleSelectedStore, state.scheduleWeekStart);
-    state.scheduleLocks[key] = { lockedAt: new Date().toISOString() };
-    saveScheduleLocks();
+    var ok = await mutateStateKeySafe('scheduleLocks', function(fresh){
+      fresh[key] = { lockedAt: new Date().toISOString() };
+    });
+    if(!ok) return;
     closeLockScheduleModal();
     renderScheduleMain();
     renderScheduleSidebar();
@@ -5167,15 +5396,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('unlockScheduleClose').addEventListener('click', closeUnlockScheduleModal);
   document.getElementById('unlockScheduleCancel').addEventListener('click', closeUnlockScheduleModal);
   unlockScheduleOverlay.addEventListener('click', function(ev){ if(ev.target === unlockScheduleOverlay) closeUnlockScheduleModal(); });
-  document.getElementById('unlockScheduleConfirm').addEventListener('click', function(){
+  document.getElementById('unlockScheduleConfirm').addEventListener('click', async function(){
     var val = document.getElementById('unlockPasswordInput').value;
     if(val !== UNLOCK_PASSWORD){
       document.getElementById('e_unlockPassword').textContent = 'Sai mật khẩu, vui lòng thử lại.';
       return;
     }
     var key = getBorrowKey(state.scheduleSelectedStore, state.scheduleWeekStart);
-    delete state.scheduleLocks[key];
-    saveScheduleLocks();
+    var ok = await mutateStateKeySafe('scheduleLocks', function(fresh){
+      delete fresh[key];
+    });
+    if(!ok) return;
     closeUnlockScheduleModal();
     renderScheduleMain();
     renderScheduleSidebar();
@@ -5409,7 +5640,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     renderTinhCong();
   });
   var HOLIDAY_EDIT_PASSWORD = '0000';
-  document.getElementById('tcHolidayRow').addEventListener('change', function(ev){
+  document.getElementById('tcHolidayRow').addEventListener('change', async function(ev){
     var sel = ev.target.closest('.tc-holiday-select');
     if(!sel) return;
     var prevVal = sel.dataset.prev || '1';
@@ -5422,9 +5653,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     sel.dataset.prev = newVal;
     var hkey2 = state.tcYear + '-' + pad2(state.tcMonth);
-    if(!state.holidayMultipliers[hkey2]) state.holidayMultipliers[hkey2] = {};
-    state.holidayMultipliers[hkey2][sel.dataset.day] = newVal;
-    saveHolidayMultipliers();
+    var day = sel.dataset.day;
+    await mutateStateKeySafe('holidayMultipliers', function(fresh){
+      if(!fresh[hkey2]) fresh[hkey2] = {};
+      fresh[hkey2][day] = newVal;
+    });
     showToast('Đã cập nhật hệ số ngày lễ.');
   });
 
@@ -5487,12 +5720,93 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
   });
 
+  /* ---------- Realtime: tự cập nhật khi máy khác thay đổi dữ liệu ---------- */
+  var realtimeChannel = null;
+  var realtimeRefetchQueue = {};
+  var realtimeRefetchTimer = null;
+
+  function scheduleRealtimeRefetch(key){
+    if(APP_STATE_KEYS.indexOf(key) === -1) return;
+    realtimeRefetchQueue[key] = true;
+    if(realtimeRefetchTimer) clearTimeout(realtimeRefetchTimer);
+    realtimeRefetchTimer = setTimeout(flushRealtimeRefetch, 400); // gộp nhiều tín hiệu gần nhau lại 1 lần tải
+  }
+
+  async function flushRealtimeRefetch(){
+    var keys = Object.keys(realtimeRefetchQueue);
+    realtimeRefetchQueue = {};
+    if(keys.length === 0) return;
+    try{
+      var res = await window.supabaseClient.from('app_state').select('key,data,updated_at').in('key', keys);
+      if(res.error) throw res.error;
+      (res.data || []).forEach(function(row){
+        // CHỈ áp dụng khi tải được dữ liệu THẬT từ máy chủ — không bao giờ tự ý đặt về rỗng
+        // để tránh lặp lại sự cố ghi đè mất dữ liệu.
+        if(row && row.data !== undefined && row.data !== null){
+          state[row.key] = row.data;
+          lastKnownUpdatedAt[row.key] = row.updated_at;
+        }
+      });
+      renderAll();
+      renderViewContent(state.currentView);
+    }catch(e){
+      // Lỗi mạng khi đồng bộ — bỏ qua lặng lẽ, dữ liệu cục bộ giữ nguyên, không có gì bị mất.
+    }
+  }
+
+  function startRealtimeSync(){
+    if(realtimeChannel) return;
+    realtimeChannel = window.supabaseClient
+      .channel('app_state_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, function(payload){
+        var row = payload.new || payload.old;
+        if(!row || !row.key) return;
+        scheduleRealtimeRefetch(row.key);
+      })
+      .subscribe();
+  }
+
+  /* ---------- Tự động dọn dữ liệu Xếp lịch cũ hơn 2 tháng (giữ tháng này + tháng trước) ---------- */
+  async function pruneOldScheduleData(){
+    var today = new Date();
+    var cutoff = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    var cutoffISO = cutoff.toISOString().slice(0, 10);
+
+    await saveScheduleMutation(function(fresh){
+      Object.keys(fresh).forEach(function(k){
+        var datePart = k.split('|')[1];
+        if(datePart && datePart < cutoffISO) delete fresh[k];
+      });
+    });
+
+    await mutateStateKeySafe('scheduleLocks', function(fresh){
+      Object.keys(fresh).forEach(function(k){
+        var datePart = k.split('|')[1];
+        if(datePart && datePart < cutoffISO) delete fresh[k];
+      });
+    });
+
+    await mutateStateKeySafe('borrowedStaff', function(fresh){
+      Object.keys(fresh).forEach(function(k){
+        var datePart = k.split('|')[1];
+        if(datePart && datePart < cutoffISO) delete fresh[k];
+      });
+    });
+
+    renderAll();
+    renderViewContent(state.currentView);
+  }
+
   /* ---------- Init ---------- */
   // Chỉ tải dữ liệu và render app SAU KHI đăng nhập thành công (sự kiện phát ra từ script đăng nhập ở trên)
   window.addEventListener('qlns-authed', async function(){
     await load();
     applyPermissions();
     renderAll();
+    startRealtimeSync();
+    if((window.CURRENT_USERNAME || '').toLowerCase() === 'admin'){
+      pruneOldScheduleData();
+    }
   }, { once: true });
 })();
 </script>
