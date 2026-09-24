@@ -695,6 +695,7 @@
     <button class="view-tab" id="tabSalary" data-view="salary">Phân bổ lương</button>
     <button class="view-tab" id="tabSchedule" data-view="schedule">Xếp lịch cửa hàng</button>
     <button class="view-tab" id="tabTinhCong" data-view="tinhCong">Tính công</button>
+    <button class="view-tab" id="tabCapNhatTT" data-view="capNhatTT">Cập nhật thông tin NS</button>
     <button class="view-tab" id="tabPhanQuyen" data-view="phanQuyen" style="display:none;">Phân quyền</button>
   </div>
 
@@ -1078,6 +1079,139 @@
   </div>
 </div>
 
+<div id="viewCapNhatTT" style="display:none;">
+  <div class="view-actions">
+    <button class="btn btn-primary btn-sm" id="btnAddUpdateRequest">+ Tạo yêu cầu cập nhật</button>
+  </div>
+  <div class="table-scroll">
+    <table class="emp-table perm-table" id="urTable">
+      <thead>
+        <tr>
+          <th style="width:110px;">Mã NV</th>
+          <th style="width:160px;">Tên nhân viên</th>
+          <th>Nội dung thay đổi</th>
+          <th style="width:130px;">Người tạo</th>
+          <th style="width:150px;">Ngày tạo</th>
+          <th style="width:110px;">Trạng thái</th>
+          <th style="width:170px;"></th>
+        </tr>
+      </thead>
+      <tbody id="urTbody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="urEmptyState" style="display:none;">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+    <h3>Chưa có yêu cầu cập nhật nào</h3>
+    <p>Bấm "Tạo yêu cầu cập nhật" để đề xuất thay đổi thông tin cho 1 nhân viên.</p>
+  </div>
+</div>
+
+<!-- Update Request: tạo yêu cầu -->
+<div class="overlay" id="urFormOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="urFormTitle">
+    <div class="modal-head">
+      <h2 id="urFormTitle">Tạo yêu cầu cập nhật thông tin</h2>
+      <button class="close-x" id="urFormClose" aria-label="Đóng">✕</button>
+    </div>
+    <form id="urForm">
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-field full">
+            <label for="ur_search">Tìm nhân viên (Mã NV hoặc Họ tên) <span class="req">*</span></label>
+            <input type="text" id="ur_search" autocomplete="off" placeholder="Gõ để tìm...">
+            <div id="ur_searchResults" style="border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:160px;overflow-y:auto;display:none;"></div>
+            <div class="err" id="e_ur_search"></div>
+          </div>
+        </div>
+
+        <div id="ur_fieldsWrap" style="display:none;">
+          <p style="font-size:12.5px;color:var(--ink-faint);margin:14px 0 10px;">Đang tạo yêu cầu cho: <b id="ur_selectedName"></b> (<span id="ur_selectedMaNV"></span>). Chỉ sửa những ô cần thay đổi, để nguyên ô nào không đổi.</p>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="ur_hoKinhDoanh">Hộ kinh doanh</label>
+              <input type="text" id="ur_hoKinhDoanh" list="dl_hkd" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="ur_chiNhanh">Chi nhánh (Cửa hàng)</label>
+              <select id="ur_chiNhanh"></select>
+            </div>
+            <div class="form-field">
+              <label for="ur_chucDanh">Chức danh</label>
+              <select id="ur_chucDanh"></select>
+            </div>
+            <div class="form-field">
+              <label for="ur_trangThai">Trạng thái</label>
+              <select id="ur_trangThai">
+                <option value="">-- Không đổi --</option>
+                <option>Thử việc</option>
+                <option>Đang làm việc</option>
+                <option>Tạm nghỉ</option>
+                <option>Nghỉ việc</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="ur_mucLuong">Mức lương (VNĐ)</label>
+              <input type="number" id="ur_mucLuong" min="0" step="1000" inputmode="numeric">
+            </div>
+            <div class="form-field">
+              <label for="ur_sdt">Số điện thoại</label>
+              <input type="tel" id="ur_sdt" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="ur_diaChi">Địa chỉ</label>
+              <input type="text" id="ur_diaChi" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="ur_cmnd">CMND/CCCD</label>
+              <input type="text" id="ur_cmnd" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="ur_stk">Số tài khoản</label>
+              <input type="text" id="ur_stk" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="ur_nganHang">Ngân hàng</label>
+              <input type="text" id="ur_nganHang" list="dl_nganHang" autocomplete="off">
+            </div>
+            <div class="form-field full">
+              <label for="ur_lyDo">Lý do thay đổi</label>
+              <textarea id="ur_lyDo" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="err" id="e_urForm" style="margin-top:8px;"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="urFormCancel">Hủy</button>
+        <button type="submit" class="btn btn-primary" id="urFormSubmit" disabled>Gửi yêu cầu</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Update Request: duyệt (xem chi tiết thay đổi + nhập mật khẩu) -->
+<div class="overlay" id="urApproveOverlay">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="urApproveTitle">
+    <div class="modal-head">
+      <h2 id="urApproveTitle">Duyệt yêu cầu cập nhật</h2>
+      <button class="close-x" id="urApproveClose" aria-label="Đóng">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;margin-bottom:10px;">Nhân viên: <b id="ur_approveName"></b> (<span id="ur_approveMaNV"></span>)</p>
+      <div id="ur_approveDiff" style="font-size:13px;display:flex;flex-direction:column;gap:6px;margin-bottom:14px;"></div>
+      <div class="form-field">
+        <label for="ur_approvePassword">Nhập mật khẩu để duyệt <span class="req">*</span></label>
+        <input type="password" id="ur_approvePassword" autocomplete="off">
+        <div class="err" id="e_ur_approvePassword"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="urApproveCancel">Hủy</button>
+      <button type="button" class="btn btn-primary" id="urApproveConfirm">Duyệt yêu cầu</button>
+    </div>
+  </div>
+</div>
+
 <div id="viewPhanQuyen" style="display:none;">
   <div class="view-actions">
     <button class="btn btn-primary btn-sm" id="btnAddPermission">+ Thêm phân quyền</button>
@@ -1131,6 +1265,7 @@
               <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="salary"> Phân bổ lương</label>
               <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" id="pf_tab_schedule" value="schedule"> Xếp lịch cửa hàng</label>
               <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="tinhCong"> Tính công</label>
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="capNhatTT"> Cập nhật thông tin NS</label>
             </div>
           </div>
           <div class="form-field full" id="pf_stores_wrap" style="display:none;">
@@ -1824,11 +1959,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var SALARY_FIELDS = ["luongCB","chuyenCan","dienThoai","xangXe","hoTroKiemNhiem","kpiKhac"];
 
   /* ---------- Persistence (đổi sang Supabase — dữ liệu dùng chung qua internet) ---------- */
-  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','holidayMultipliers','userPermissions'];
+  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','holidayMultipliers','userPermissions','updateRequests'];
   var APP_STATE_DEFAULTS = {
     employees: [], jobTitles: [], shifts: [], salaryAllocations: {}, stores: [],
     schedule: {}, borrowedStaff: {}, employeeScheduleStatus: {}, tasks: [],
-    scheduleLocks: {}, holidayMultipliers: {}, userPermissions: {}
+    scheduleLocks: {}, holidayMultipliers: {}, userPermissions: {}, updateRequests: []
   };
   var lastKnownUpdatedAt = {};
 
@@ -1868,6 +2003,43 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
   }
   function save(){ persistState('employees', state.employees); }
+
+  // Khi đổi Mã NV: di chuyển TOÀN BỘ dữ liệu lịch sử gắn với mã cũ sang mã mới, không để mồ côi.
+  async function migrateEmployeeMaNV(oldMaNV, newMaNV){
+    await saveScheduleMutation(function(fresh){
+      var oldPrefix = oldMaNV + '|';
+      Object.keys(fresh).forEach(function(k){
+        if(k.indexOf(oldPrefix) === 0){
+          var datePart = k.slice(oldPrefix.length);
+          fresh[newMaNV + '|' + datePart] = fresh[k];
+          delete fresh[k];
+        }
+      });
+    });
+    await mutateStateKeySafe('employeeScheduleStatus', function(fresh){
+      if(fresh[oldMaNV] !== undefined){
+        fresh[newMaNV] = fresh[oldMaNV];
+        delete fresh[oldMaNV];
+      }
+    });
+    await mutateStateKeySafe('borrowedStaff', function(fresh){
+      Object.keys(fresh).forEach(function(storeWeekKey){
+        var list = fresh[storeWeekKey];
+        if(!Array.isArray(list)) return;
+        var idx = list.indexOf(oldMaNV);
+        if(idx !== -1) list[idx] = newMaNV;
+      });
+    });
+    await mutateStateKeySafe('salaryAllocations', function(fresh){
+      var oldKey = oldMaNV.toLowerCase(), newKey = newMaNV.toLowerCase();
+      if(fresh[oldKey] !== undefined){
+        fresh[newKey] = Object.assign({}, fresh[newKey] || {}, fresh[oldKey]);
+        delete fresh[oldKey];
+      }
+    });
+    renderAll();
+    showToast('Đã chuyển toàn bộ dữ liệu lịch sử sang mã NV mới.');
+  }
 
   // ====== HÀM LƯU AN TOÀN DUY NHẤT, DÙNG CHUNG CHO TOÀN BỘ DỮ LIỆU ======
   // Cơ chế "so sánh trước khi ghi" (compare-and-swap): chỉ ghi thành công nếu dữ liệu trên máy chủ
@@ -2341,6 +2513,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     var isEdit = !!state.editingId;
     var editingId = state.editingId;
+    var oldMaNV = null;
+    if(isEdit){
+      var editingEmpBefore = state.employees.find(function(x){ return x.id === editingId; });
+      oldMaNV = editingEmpBefore ? editingEmpBefore.maNV : null;
+    }
     data.capNhatLuc = new Date().toISOString();
     if(isEdit){
       data.id = editingId;
@@ -2389,6 +2566,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     if(submitBtn){ submitBtn.disabled = false; }
     if(!ok) return; // lỗi đã báo trong hàm — giữ nguyên form để thử lưu lại, không mất dữ liệu đang nhập
+
+    if(isEdit && oldMaNV && data.maNV && oldMaNV !== data.maNV){
+      await migrateEmployeeMaNV(oldMaNV, data.maNV);
+    }
 
     if(!isEdit){
       // Phòng trường hợp mã NV này từng dùng cho 1 nhân viên khác đã bị xoá trước đó (mã bị cấp lại) —
@@ -2812,6 +2993,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(view === 'salary'){ renderSalaryTable(); }
     if(view === 'schedule'){ renderScheduleSidebar(); renderScheduleMain(); }
     if(view === 'tinhCong'){ renderTinhCong(); }
+    if(view === 'capNhatTT'){ renderUpdateRequestTable(); }
     if(view === 'phanQuyen'){ renderPermissionTable(); }
   }
   function switchView(view){
@@ -2821,12 +3003,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('viewSalary').style.display = view === 'salary' ? '' : 'none';
     document.getElementById('viewSchedule').style.display = view === 'schedule' ? '' : 'none';
     document.getElementById('viewTinhCong').style.display = view === 'tinhCong' ? '' : 'none';
+    document.getElementById('viewCapNhatTT').style.display = view === 'capNhatTT' ? '' : 'none';
     document.getElementById('viewPhanQuyen').style.display = view === 'phanQuyen' ? '' : 'none';
     document.getElementById('tabEmployees').classList.toggle('active', view === 'employees');
     document.getElementById('tabJobTitles').classList.toggle('active', view === 'jobTitles');
     document.getElementById('tabSalary').classList.toggle('active', view === 'salary');
     document.getElementById('tabSchedule').classList.toggle('active', view === 'schedule');
     document.getElementById('tabTinhCong').classList.toggle('active', view === 'tinhCong');
+    document.getElementById('tabCapNhatTT').classList.toggle('active', view === 'capNhatTT');
     document.getElementById('tabPhanQuyen').classList.toggle('active', view === 'phanQuyen');
     renderViewContent(view);
   }
@@ -2835,10 +3019,251 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('tabSalary').addEventListener('click', function(){ switchView('salary'); });
   document.getElementById('tabSchedule').addEventListener('click', function(){ switchView('schedule'); });
   document.getElementById('tabTinhCong').addEventListener('click', function(){ switchView('tinhCong'); });
+  document.getElementById('tabCapNhatTT').addEventListener('click', function(){ switchView('capNhatTT'); });
   document.getElementById('tabPhanQuyen').addEventListener('click', function(){ switchView('phanQuyen'); });
 
+  /* ---------- Cập nhật thông tin nhân sự (Request/Duyệt) ---------- */
+  var UR_FIELDS = ['hoKinhDoanh','chiNhanh','chucDanh','trangThai','mucLuong','sdt','diaChi','cmndCccd','stk','nganHang'];
+  var UR_FIELD_LABELS = {
+    hoKinhDoanh:'Hộ kinh doanh', chiNhanh:'Chi nhánh', chucDanh:'Chức danh', trangThai:'Trạng thái',
+    mucLuong:'Mức lương', sdt:'SĐT', diaChi:'Địa chỉ', cmndCccd:'CMND/CCCD', stk:'STK', nganHang:'Ngân hàng'
+  };
+  var UR_INPUT_ID = {
+    hoKinhDoanh:'ur_hoKinhDoanh', chiNhanh:'ur_chiNhanh', chucDanh:'ur_chucDanh', trangThai:'ur_trangThai',
+    mucLuong:'ur_mucLuong', sdt:'ur_sdt', diaChi:'ur_diaChi', cmndCccd:'ur_cmnd', stk:'ur_stk', nganHang:'ur_nganHang'
+  };
+  var URFormOverlay = document.getElementById('urFormOverlay');
+  var urForm = document.getElementById('urForm');
+  var urSelectedEmployee = null;
+  var URApproveOverlay = document.getElementById('urApproveOverlay');
+  var urApprovingId = null;
+  var UR_APPROVE_PASSWORD = '0000';
+
+  function fmtMoneyUR(n){ return Number(n||0).toLocaleString('vi-VN') + 'đ'; }
+  function urFieldDisplay(field, val){
+    if(val === undefined || val === null || val === '') return '(trống)';
+    if(field === 'mucLuong') return fmtMoneyUR(val);
+    return String(val);
+  }
+
+  function openUpdateRequestForm(){
+    urSelectedEmployee = null;
+    document.getElementById('ur_search').value = '';
+    document.getElementById('ur_searchResults').style.display = 'none';
+    document.getElementById('ur_fieldsWrap').style.display = 'none';
+    document.getElementById('urFormSubmit').disabled = true;
+    document.getElementById('e_ur_search').textContent = '';
+    document.getElementById('e_urForm').textContent = '';
+    document.getElementById('ur_lyDo').value = '';
+    URFormOverlay.classList.add('show');
+    setTimeout(function(){ document.getElementById('ur_search').focus(); }, 60);
+  }
+  function closeUpdateRequestForm(){ URFormOverlay.classList.remove('show'); }
+  document.getElementById('btnAddUpdateRequest').addEventListener('click', openUpdateRequestForm);
+  document.getElementById('urFormClose').addEventListener('click', closeUpdateRequestForm);
+  document.getElementById('urFormCancel').addEventListener('click', closeUpdateRequestForm);
+  URFormOverlay.addEventListener('click', function(ev){ if(ev.target === URFormOverlay) closeUpdateRequestForm(); });
+
+  document.getElementById('ur_search').addEventListener('input', function(ev){
+    var q = ev.target.value.trim().toLowerCase();
+    var resultsEl = document.getElementById('ur_searchResults');
+    if(!q){ resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+    var matches = state.employees.filter(function(e){
+      return (e.maNV && e.maNV.toLowerCase().indexOf(q) !== -1) || (e.hoTen && e.hoTen.toLowerCase().indexOf(q) !== -1);
+    }).slice(0, 20);
+    if(matches.length === 0){
+      resultsEl.innerHTML = '<div style="padding:8px 10px;font-size:13px;color:var(--ink-faint);">Không tìm thấy nhân viên.</div>';
+      resultsEl.style.display = 'block';
+      return;
+    }
+    resultsEl.innerHTML = matches.map(function(e){
+      return '<div class="ur-search-item" data-id="'+escapeHtml(e.id)+'" style="padding:8px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);">' +
+        '<b>'+escapeHtml(e.maNV)+'</b> — '+escapeHtml(e.hoTen||'') + ' <span style="color:var(--ink-faint);">('+escapeHtml(e.chiNhanh||'')+')</span>' +
+      '</div>';
+    }).join('');
+    resultsEl.style.display = 'block';
+  });
+  document.getElementById('ur_searchResults').addEventListener('click', function(ev){
+    var item = ev.target.closest('.ur-search-item');
+    if(!item) return;
+    var emp = state.employees.find(function(e){ return e.id === item.dataset.id; });
+    if(!emp) return;
+    urSelectedEmployee = emp;
+    document.getElementById('ur_search').value = emp.maNV + ' — ' + (emp.hoTen||'');
+    document.getElementById('ur_searchResults').style.display = 'none';
+    document.getElementById('ur_selectedName').textContent = emp.hoTen || '';
+    document.getElementById('ur_selectedMaNV').textContent = emp.maNV;
+    document.getElementById('ur_fieldsWrap').style.display = '';
+    document.getElementById('urFormSubmit').disabled = false;
+
+    document.getElementById('ur_hoKinhDoanh').value = emp.hoKinhDoanh || '';
+    populateSelect(document.getElementById('ur_chiNhanh'), getDeclaredChiNhanhNames(), emp.chiNhanh || '', '-- Không đổi --');
+    populateSelect(document.getElementById('ur_chucDanh'), getDeclaredChucDanhNames(), emp.chucDanh || '', '-- Không đổi --');
+    document.getElementById('ur_trangThai').value = '';
+    document.getElementById('ur_mucLuong').value = '';
+    document.getElementById('ur_mucLuong').placeholder = fmtMoneyUR(emp.mucLuong);
+    document.getElementById('ur_sdt').value = emp.sdt || '';
+    document.getElementById('ur_diaChi').value = emp.diaChi || '';
+    document.getElementById('ur_cmnd').value = emp.cmndCccd || '';
+    document.getElementById('ur_stk').value = emp.stk || '';
+    document.getElementById('ur_nganHang').value = emp.nganHang || '';
+  });
+
+  urForm.addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    document.getElementById('e_urForm').textContent = '';
+    if(!urSelectedEmployee){
+      document.getElementById('e_ur_search').textContent = 'Vui lòng chọn 1 nhân viên từ danh sách.';
+      return;
+    }
+    var emp = urSelectedEmployee;
+    var changes = {}, oldValues = {};
+    UR_FIELDS.forEach(function(f){
+      var raw = document.getElementById(UR_INPUT_ID[f]).value;
+      var newVal = (f === 'mucLuong') ? (raw === '' ? undefined : Number(raw)) : (raw === '' ? undefined : raw.trim());
+      if(newVal === undefined || newVal === '') return;
+      var curVal = emp[f];
+      if(String(newVal) !== String(curVal || '')){
+        changes[f] = newVal;
+        oldValues[f] = curVal;
+      }
+    });
+    if(Object.keys(changes).length === 0){
+      document.getElementById('e_urForm').textContent = 'Bạn chưa thay đổi ô nào — chỉnh ít nhất 1 thông tin cần cập nhật.';
+      return;
+    }
+    var reqObj = {
+      id: uid(),
+      employeeId: emp.id,
+      maNV: emp.maNV,
+      hoTen: emp.hoTen,
+      changes: changes,
+      oldValues: oldValues,
+      reason: document.getElementById('ur_lyDo').value.trim(),
+      requestedBy: window.CURRENT_USERNAME || '',
+      requestedAt: new Date().toISOString(),
+      status: 'Chờ duyệt',
+      approvedBy: null,
+      approvedAt: null
+    };
+    var ok = await mutateStateKeySafe('updateRequests', function(fresh){ fresh.push(reqObj); });
+    if(!ok) return;
+    showToast('Đã gửi yêu cầu cập nhật, chờ duyệt.');
+    closeUpdateRequestForm();
+    renderUpdateRequestTable();
+  });
+
+  function renderUpdateRequestTable(){
+    var tbody = document.getElementById('urTbody');
+    var empty = document.getElementById('urEmptyState');
+    var list = (state.updateRequests || []).slice().sort(function(a,b){ return (b.requestedAt||'').localeCompare(a.requestedAt||''); });
+    if(list.length === 0){
+      tbody.innerHTML = '';
+      empty.style.display = 'flex';
+      return;
+    }
+    empty.style.display = 'none';
+    var STATUS_TAG = { 'Chờ duyệt':'tag-2', 'Đã duyệt':'tag-0', 'Từ chối':'tag-3' };
+    tbody.innerHTML = list.map(function(r){
+      var summary = Object.keys(r.changes).map(function(f){
+        return '<div>'+escapeHtml(UR_FIELD_LABELS[f])+': '+escapeHtml(urFieldDisplay(f, r.oldValues[f]))+' → <b>'+escapeHtml(urFieldDisplay(f, r.changes[f]))+'</b></div>';
+      }).join('');
+      var dateLabel = r.requestedAt ? new Date(r.requestedAt).toLocaleString('vi-VN') : '';
+      var actionsHtml = r.status === 'Chờ duyệt'
+        ? '<button type="button" class="btn btn-primary btn-sm ur-approve-btn" data-id="'+escapeHtml(r.id)+'">Duyệt</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm ur-reject-btn" data-id="'+escapeHtml(r.id)+'">Từ chối</button>'
+        : (r.approvedBy ? escapeHtml((r.status === 'Đã duyệt' ? 'Duyệt bởi: ' : 'Xử lý bởi: ') + r.approvedBy) : '');
+      return '<tr>' +
+        '<td class="col-code">'+escapeHtml(r.maNV)+'</td>' +
+        '<td>'+escapeHtml(r.hoTen||'')+'</td>' +
+        '<td style="font-size:12.5px;">'+summary+(r.reason ? '<div style="color:var(--ink-faint);margin-top:4px;">Lý do: '+escapeHtml(r.reason)+'</div>' : '')+'</td>' +
+        '<td>'+escapeHtml(r.requestedBy||'')+'</td>' +
+        '<td style="font-size:12.5px;">'+escapeHtml(dateLabel)+'</td>' +
+        '<td><span class="tag '+(STATUS_TAG[r.status]||'tag-1')+'">'+escapeHtml(r.status)+'</span></td>' +
+        '<td>'+actionsHtml+'</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  document.getElementById('urTbody').addEventListener('click', function(ev){
+    var approveBtn = ev.target.closest('.ur-approve-btn');
+    var rejectBtn = ev.target.closest('.ur-reject-btn');
+    if(approveBtn){ openApproveModal(approveBtn.dataset.id); return; }
+    if(rejectBtn){ rejectUpdateRequest(rejectBtn.dataset.id); return; }
+  });
+
+  function openApproveModal(id){
+    var req = (state.updateRequests || []).find(function(r){ return r.id === id; });
+    if(!req) return;
+    urApprovingId = id;
+    document.getElementById('ur_approveName').textContent = req.hoTen || '';
+    document.getElementById('ur_approveMaNV').textContent = req.maNV;
+    document.getElementById('ur_approveDiff').innerHTML = Object.keys(req.changes).map(function(f){
+      return '<div>'+escapeHtml(UR_FIELD_LABELS[f])+': '+escapeHtml(urFieldDisplay(f, req.oldValues[f]))+' → <b>'+escapeHtml(urFieldDisplay(f, req.changes[f]))+'</b></div>';
+    }).join('');
+    document.getElementById('ur_approvePassword').value = '';
+    document.getElementById('e_ur_approvePassword').textContent = '';
+    URApproveOverlay.classList.add('show');
+    setTimeout(function(){ document.getElementById('ur_approvePassword').focus(); }, 60);
+  }
+  function closeApproveModal(){ URApproveOverlay.classList.remove('show'); urApprovingId = null; }
+  document.getElementById('urApproveClose').addEventListener('click', closeApproveModal);
+  document.getElementById('urApproveCancel').addEventListener('click', closeApproveModal);
+  URApproveOverlay.addEventListener('click', function(ev){ if(ev.target === URApproveOverlay) closeApproveModal(); });
+
+  document.getElementById('urApproveConfirm').addEventListener('click', async function(){
+    if(!urApprovingId) return;
+    var pass = document.getElementById('ur_approvePassword').value;
+    if(pass !== UR_APPROVE_PASSWORD){
+      document.getElementById('e_ur_approvePassword').textContent = 'Sai mật khẩu, vui lòng thử lại.';
+      return;
+    }
+    var reqId = urApprovingId;
+    var req = (state.updateRequests || []).find(function(r){ return r.id === reqId; });
+    if(!req) return;
+
+    var applyOk = await saveEmployeesMutation(function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === req.employeeId; });
+      if(idx === -1) return false; // nhân viên đã bị xoá — không áp dụng được nữa
+      Object.keys(req.changes).forEach(function(f){ fresh[idx][f] = req.changes[f]; });
+      fresh[idx].capNhatLuc = new Date().toISOString();
+    });
+    if(!applyOk){
+      document.getElementById('e_ur_approvePassword').textContent = 'Không áp dụng được (nhân viên có thể đã bị xoá hoặc có lỗi mạng) — thử lại.';
+      return;
+    }
+
+    await mutateStateKeySafe('updateRequests', function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === reqId; });
+      if(idx !== -1){
+        fresh[idx].status = 'Đã duyệt';
+        fresh[idx].approvedBy = window.CURRENT_USERNAME || '';
+        fresh[idx].approvedAt = new Date().toISOString();
+      }
+    });
+
+    renderAll();
+    renderUpdateRequestTable();
+    showToast('Đã duyệt và áp dụng thay đổi cho nhân viên.');
+    closeApproveModal();
+  });
+
+  async function rejectUpdateRequest(id){
+    if(!confirm('Từ chối yêu cầu cập nhật này?')) return;
+    await mutateStateKeySafe('updateRequests', function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === id; });
+      if(idx !== -1){
+        fresh[idx].status = 'Từ chối';
+        fresh[idx].approvedBy = window.CURRENT_USERNAME || '';
+        fresh[idx].approvedAt = new Date().toISOString();
+      }
+    });
+    renderUpdateRequestTable();
+    showToast('Đã từ chối yêu cầu.');
+  }
+
   /* ---------- Phân quyền ---------- */
-  var PERM_TAB_LABELS = { employees:'Nhân viên', jobTitles:'Khai báo', salary:'Phân bổ lương', schedule:'Xếp lịch cửa hàng', tinhCong:'Tính công' };
+  var PERM_TAB_LABELS = { employees:'Nhân viên', jobTitles:'Khai báo', salary:'Phân bổ lương', schedule:'Xếp lịch cửa hàng', tinhCong:'Tính công', capNhatTT:'Cập nhật thông tin NS' };
   var permFormOverlay = document.getElementById('permFormOverlay');
   var permForm = document.getElementById('permForm');
   var pfEditingUsername = null;
@@ -3031,7 +3456,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       jobTitles: document.getElementById('tabJobTitles'),
       salary: document.getElementById('tabSalary'),
       schedule: document.getElementById('tabSchedule'),
-      tinhCong: document.getElementById('tabTinhCong')
+      tinhCong: document.getElementById('tabTinhCong'),
+      capNhatTT: document.getElementById('tabCapNhatTT')
     };
     var firstAllowed = null;
     Object.keys(tabButtons).forEach(function(key){
@@ -5801,32 +6227,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       Object.keys(fresh).forEach(function(k){
         var datePart = k.split('|')[1];
         if(datePart && datePart < cutoffISO) delete fresh[k];
-      });
-    });
-
-    // Dọn dữ liệu MỒ CÔI: xoá mọi lịch làm/trạng thái gắn với mã NV không còn tồn tại trong danh sách
-    // Nhân viên hiện tại — tránh trường hợp mã NV bị cấp lại (VD: NEW0001) "thừa kế" nhầm lịch làm cũ
-    // của người đã bị xoá trước đó.
-    var validMaNVSet = {};
-    state.employees.forEach(function(e){ if(e.maNV) validMaNVSet[e.maNV] = true; });
-
-    await mutateStateKeySafe('schedule', function(fresh){
-      Object.keys(fresh).forEach(function(k){
-        var maNVPart = k.split('|')[0];
-        if(!validMaNVSet[maNVPart]) delete fresh[k];
-      });
-    });
-    await mutateStateKeySafe('employeeScheduleStatus', function(fresh){
-      Object.keys(fresh).forEach(function(k){
-        if(!validMaNVSet[k]) delete fresh[k];
-      });
-    });
-    await mutateStateKeySafe('borrowedStaff', function(fresh){
-      Object.keys(fresh).forEach(function(storeWeekKey){
-        var list = fresh[storeWeekKey];
-        if(!Array.isArray(list)) return;
-        var filtered = list.filter(function(maNV){ return validMaNVSet[maNV]; });
-        if(filtered.length !== list.length) fresh[storeWeekKey] = filtered;
       });
     });
 
