@@ -6108,24 +6108,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     var grouped = getTinhCongGroups(filtered, year, month, numDays);
     var headers = ['Cửa hàng','Mã NV','Tên nhân viên','Chức vụ','Hộ KD',
-      'Số giờ Thực hiện','Số giờ công chuẩn','Giờ OT','Số tiền OT','Tiền công','Tổng lương'];
-    for(var dd = 1; dd <= numDays; dd++) headers.push('Ngày ' + dd);
+      'Số giờ Thực hiện','Số giờ công chuẩn','Giờ OT','Số tiền OT','Tiền công','Tổng lương',
+      'Lương CB','Chuyên cần','Điện thoại','Xăng xe','Hỗ trợ kiêm nhiệm','KPIs khác','Tổng lương thỏa thuận'];
     var data = [headers];
     grouped.storeNames.forEach(function(storeName){
       grouped.groups[storeName].forEach(function(e){
         var stats = computeMonthlyStats(e, year, month, numDays, storeName);
-        var row = [storeName, e.maNV, e.hoTen, e.chucDanh||'', e.hoKinhDoanh||'',
-          stats.soGioThucHien, stats.soGioCongChuan, stats.gioOT, stats.tienOT, stats.tienCong, stats.tongLuong];
-        for(var d2 = 1; d2 <= numDays; d2++){
-          var info = computeDayInfo(e.maNV, tcDateISO(year, month, d2), storeName);
-          if(!info) row.push('');
-          else row.push(info.type === 'off' ? 'OFF' : info.label);
-        }
-        data.push(row);
+        var sr = buildSalaryRow(e); // lấy nguyên từ tab Phân bổ lương, không tính toán lại
+        data.push([storeName, e.maNV, e.hoTen, e.chucDanh||'', e.hoKinhDoanh||'',
+          stats.soGioThucHien, stats.soGioCongChuan, stats.gioOT, stats.tienOT, stats.tienCong, stats.tongLuong,
+          sr.luongCB, sr.chuyenCan, sr.dienThoai, sr.xangXe, sr.hoTroKiemNhiem, sr.kpiKhac, sr.tongLuong]);
       });
     });
     var ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = headers.map(function(){ return {wch:12}; });
+    ws['!cols'] = headers.map(function(){ return {wch:14}; });
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'ChamCong');
     var wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
