@@ -850,7 +850,7 @@
                 <th data-key="chucDanh">Chức danh<span class="sort-ind">↕</span></th>
                 <th data-key="gioChuanNgay" style="text-align:right;">Số giờ công chuẩn/ngày<span class="sort-ind">↕</span></th>
                 <th data-key="otPerGio" style="text-align:right;">Số tiền OT/Giờ<span class="sort-ind">↕</span></th>
-                <th data-key="tiLeThuong" style="text-align:right;">Tỉ lệ chia thưởng<span class="sort-ind">↕</span></th>
+                <th data-key="tiLeThuong" style="text-align:right;">Hệ số chia thưởng<span class="sort-ind">↕</span></th>
                 <th data-key="soNgayNghi" style="text-align:right;">Số ngày nghỉ trong tháng<span class="sort-ind">↕</span></th>
               </tr>
             </thead>
@@ -1559,8 +1559,8 @@
             <div class="err" id="e_jt_ot"></div>
           </div>
           <div class="form-field full">
-            <label for="jt_tile">Tỉ lệ chia thưởng (%) <span class="req">*</span></label>
-            <input type="number" id="jt_tile" name="tiLeThuong" min="0" max="100" step="0.1" inputmode="decimal">
+            <label for="jt_tile">Hệ số chia thưởng <span class="req">*</span></label>
+            <input type="number" id="jt_tile" name="tiLeThuong" min="0" step="0.1" inputmode="decimal" placeholder="VD: 1, 1.5, 0.6...">
             <div class="err" id="e_jt_tile"></div>
           </div>
           <div class="form-field full">
@@ -3983,7 +3983,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '<td><span class="tag tag-'+idx+'">'+escapeHtml(j.chucDanh||'—')+'</span></td>' +
         '<td class="col-salary">'+(j.gioChuanNgay !== '' && j.gioChuanNgay !== undefined && j.gioChuanNgay !== null ? j.gioChuanNgay + ' giờ' : '—')+'</td>' +
         '<td class="col-salary">'+fmtMoney(j.otPerGio)+'</td>' +
-        '<td class="col-salary">'+(j.tiLeThuong !== '' && j.tiLeThuong !== undefined && j.tiLeThuong !== null ? j.tiLeThuong + '%' : '—')+'</td>' +
+        '<td class="col-salary">'+(j.tiLeThuong !== '' && j.tiLeThuong !== undefined && j.tiLeThuong !== null ? j.tiLeThuong : '—')+'</td>' +
         '<td class="col-salary">'+(j.soNgayNghi !== '' && j.soNgayNghi !== undefined && j.soNgayNghi !== null ? j.soNgayNghi + ' ngày' : '—')+'</td>' +
       '</tr>';
     }).join('');
@@ -4073,8 +4073,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(data.otPerGio === '' || data.otPerGio === undefined || isNaN(Number(data.otPerGio)) || Number(data.otPerGio) < 0){
       errors.otPerGio = 'Vui lòng nhập số tiền OT/giờ hợp lệ.';
     }
-    if(data.tiLeThuong === '' || data.tiLeThuong === undefined || isNaN(Number(data.tiLeThuong)) || Number(data.tiLeThuong) < 0 || Number(data.tiLeThuong) > 100){
-      errors.tiLeThuong = 'Vui lòng nhập tỉ lệ chia thưởng từ 0 đến 100.';
+    if(data.tiLeThuong === '' || data.tiLeThuong === undefined || isNaN(Number(data.tiLeThuong)) || Number(data.tiLeThuong) < 0){
+      errors.tiLeThuong = 'Vui lòng nhập hệ số chia thưởng hợp lệ (VD: 1, 1.5, 0.6...).';
     }
     if(data.soNgayNghi === '' || data.soNgayNghi === undefined || isNaN(Number(data.soNgayNghi)) || Number(data.soNgayNghi) < 0){
       errors.soNgayNghi = 'Vui lòng nhập số ngày nghỉ trong tháng hợp lệ.';
@@ -5991,7 +5991,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     for(var d = 1; d <= numDays; d++) dayList.push(d);
 
     var SUMMARY_HEADS = ['Số giờ Thực hiện','Số giờ công chuẩn','Giờ OT','Số tiền OT','Tiền công','Tổng lương'];
-    var headHtml = '<th class="tc-head-fixed">MÃ NV</th><th class="tc-head-fixed">TÊN NHÂN VIÊN</th><th class="tc-head-fixed">CHỨC VỤ</th><th class="tc-head-fixed">HỘ KD</th><th class="tc-head-fixed">TỈ LỆ CHIA THƯỞNG</th>';
+    var headHtml = '<th class="tc-head-fixed">MÃ NV</th><th class="tc-head-fixed">TÊN NHÂN VIÊN</th><th class="tc-head-fixed">CHỨC VỤ</th><th class="tc-head-fixed">HỘ KD</th><th class="tc-head-fixed">HỆ SỐ CHIA THƯỞNG</th>';
     SUMMARY_HEADS.forEach(function(h){ headHtml += '<th class="tc-summary-head">'+h+'</th>'; });
     dayList.forEach(function(dd){ headHtml += '<th class="tc-day-head">'+dd+'</th>'; });
     document.getElementById('tcHeadRow').innerHTML = headHtml;
@@ -6029,7 +6029,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var empRows = grouped.groups[storeName].map(function(e){
           var stats = computeMonthlyStats(e, year, month, numDays, storeName);
           var jtRow = getJobTitleFor(e.chucDanh);
-          var tiLeThuongLabel = (jtRow && jtRow.tiLeThuong !== undefined && jtRow.tiLeThuong !== null && jtRow.tiLeThuong !== '') ? (jtRow.tiLeThuong + '%') : '—';
+          var tiLeThuongLabel = (jtRow && jtRow.tiLeThuong !== undefined && jtRow.tiLeThuong !== null && jtRow.tiLeThuong !== '') ? jtRow.tiLeThuong : '—';
           var rowHtml = '<tr>' +
             '<td class="tc-name-cell col-code">'+escapeHtml(e.maNV)+'</td>' +
             '<td class="tc-name-cell"><div class="n">'+escapeHtml(e.hoTen||'—')+'</div></td>' +
@@ -6110,7 +6110,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return;
     }
     var grouped = getTinhCongGroups(filtered, year, month, numDays);
-    var headers = ['Cửa hàng','Mã NV','Tên nhân viên','Chức vụ','Hộ KD','Tỉ lệ chia thưởng',
+    var headers = ['Cửa hàng','Mã NV','Tên nhân viên','Chức vụ','Hộ KD','Hệ số chia thưởng',
       'Số giờ Thực hiện','Số giờ công chuẩn','Giờ OT','Số tiền OT','Tiền công','Tổng lương',
       'Lương CB','Chuyên cần','Điện thoại','Xăng xe','Hỗ trợ kiêm nhiệm','KPIs khác','Tổng lương thỏa thuận'];
     var data = [headers];
@@ -6119,7 +6119,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var stats = computeMonthlyStats(e, year, month, numDays, storeName);
         var sr = buildSalaryRow(e); // lấy nguyên từ tab Phân bổ lương, không tính toán lại
         var jtRow = getJobTitleFor(e.chucDanh);
-        var tiLeThuongVal = (jtRow && jtRow.tiLeThuong !== undefined && jtRow.tiLeThuong !== null && jtRow.tiLeThuong !== '') ? (jtRow.tiLeThuong + '%') : '';
+        var tiLeThuongVal = (jtRow && jtRow.tiLeThuong !== undefined && jtRow.tiLeThuong !== null && jtRow.tiLeThuong !== '') ? jtRow.tiLeThuong : '';
         data.push([storeName, e.maNV, e.hoTen, e.chucDanh||'', e.hoKinhDoanh||'', tiLeThuongVal,
           stats.soGioThucHien, stats.soGioCongChuan, stats.gioOT, stats.tienOT, stats.tienCong, stats.tongLuong,
           sr.luongCB, sr.chuyenCan, sr.dienThoai, sr.xangXe, sr.hoTroKiemNhiem, sr.kpiKhac, sr.tongLuong]);
