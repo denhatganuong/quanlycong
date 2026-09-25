@@ -5991,7 +5991,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     for(var d = 1; d <= numDays; d++) dayList.push(d);
 
     var SUMMARY_HEADS = ['Số giờ Thực hiện','Số giờ công chuẩn','Giờ OT','Số tiền OT','Tiền công','Tổng lương'];
-    var headHtml = '<th class="tc-head-fixed">MÃ NV</th><th class="tc-head-fixed">TÊN NHÂN VIÊN</th><th class="tc-head-fixed">CHỨC VỤ</th><th class="tc-head-fixed">HỘ KD</th>';
+    var headHtml = '<th class="tc-head-fixed">MÃ NV</th><th class="tc-head-fixed">TÊN NHÂN VIÊN</th><th class="tc-head-fixed">CHỨC VỤ</th><th class="tc-head-fixed">HỘ KD</th><th class="tc-head-fixed">TỈ LỆ CHIA THƯỞNG</th>';
     SUMMARY_HEADS.forEach(function(h){ headHtml += '<th class="tc-summary-head">'+h+'</th>'; });
     dayList.forEach(function(dd){ headHtml += '<th class="tc-day-head">'+dd+'</th>'; });
     document.getElementById('tcHeadRow').innerHTML = headHtml;
@@ -5999,7 +5999,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var hkey = year + '-' + pad2(month);
     var hmap = state.holidayMultipliers[hkey] || {};
     var holidayOptions = ['1','1.5','2','3'];
-    var holidayHtml = '<th class="tc-head-fixed">NGÀY LỄ (HỆ SỐ)</th><th></th><th></th><th></th>';
+    var holidayHtml = '<th class="tc-head-fixed">NGÀY LỄ (HỆ SỐ)</th><th></th><th></th><th></th><th></th>';
     for(var hi=0; hi<SUMMARY_HEADS.length; hi++) holidayHtml += '<th></th>';
     dayList.forEach(function(dd){
       var val = hmap[dd] || '1';
@@ -6019,7 +6019,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       empty.style.display = 'flex';
     } else {
       empty.style.display = 'none';
-      var colspan = 4 + SUMMARY_HEADS.length + numDays;
+      var colspan = 5 + SUMMARY_HEADS.length + numDays;
       tbody.innerHTML = grouped.storeNames.map(function(storeName){
         var storeObj = state.stores.find(function(s){ return s.tenCuaHang === storeName; });
         var mgr = storeObj ? state.employees.find(function(x){ return x.maNV === storeObj.quanLyTrucTiep; }) : null;
@@ -6028,11 +6028,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '</td></tr>';
         var empRows = grouped.groups[storeName].map(function(e){
           var stats = computeMonthlyStats(e, year, month, numDays, storeName);
+          var jtRow = getJobTitleFor(e.chucDanh);
+          var tiLeThuongLabel = (jtRow && jtRow.tiLeThuong !== undefined && jtRow.tiLeThuong !== null && jtRow.tiLeThuong !== '') ? (jtRow.tiLeThuong + '%') : '—';
           var rowHtml = '<tr>' +
             '<td class="tc-name-cell col-code">'+escapeHtml(e.maNV)+'</td>' +
             '<td class="tc-name-cell"><div class="n">'+escapeHtml(e.hoTen||'—')+'</div></td>' +
             '<td>'+escapeHtml(e.chucDanh||'—')+'</td>' +
             '<td>'+escapeHtml(e.hoKinhDoanh||'—')+'</td>' +
+            '<td>'+escapeHtml(tiLeThuongLabel)+'</td>' +
             '<td class="tc-summary-cell">'+fmtHoursPlain(stats.soGioThucHien)+'</td>' +
             '<td class="tc-summary-cell">'+fmtHoursPlain(stats.soGioCongChuan)+'</td>' +
             '<td class="tc-summary-cell">'+fmtHoursPlain(stats.gioOT)+'</td>' +
@@ -6107,7 +6110,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return;
     }
     var grouped = getTinhCongGroups(filtered, year, month, numDays);
-    var headers = ['Cửa hàng','Mã NV','Tên nhân viên','Chức vụ','Hộ KD',
+    var headers = ['Cửa hàng','Mã NV','Tên nhân viên','Chức vụ','Hộ KD','Tỉ lệ chia thưởng',
       'Số giờ Thực hiện','Số giờ công chuẩn','Giờ OT','Số tiền OT','Tiền công','Tổng lương',
       'Lương CB','Chuyên cần','Điện thoại','Xăng xe','Hỗ trợ kiêm nhiệm','KPIs khác','Tổng lương thỏa thuận'];
     var data = [headers];
@@ -6115,7 +6118,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       grouped.groups[storeName].forEach(function(e){
         var stats = computeMonthlyStats(e, year, month, numDays, storeName);
         var sr = buildSalaryRow(e); // lấy nguyên từ tab Phân bổ lương, không tính toán lại
-        data.push([storeName, e.maNV, e.hoTen, e.chucDanh||'', e.hoKinhDoanh||'',
+        var jtRow = getJobTitleFor(e.chucDanh);
+        var tiLeThuongVal = (jtRow && jtRow.tiLeThuong !== undefined && jtRow.tiLeThuong !== null && jtRow.tiLeThuong !== '') ? (jtRow.tiLeThuong + '%') : '';
+        data.push([storeName, e.maNV, e.hoTen, e.chucDanh||'', e.hoKinhDoanh||'', tiLeThuongVal,
           stats.soGioThucHien, stats.soGioCongChuan, stats.gioOT, stats.tienOT, stats.tienCong, stats.tongLuong,
           sr.luongCB, sr.chuyenCan, sr.dienThoai, sr.xangXe, sr.hoTroKiemNhiem, sr.kpiKhac, sr.tongLuong]);
       });
