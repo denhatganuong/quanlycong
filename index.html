@@ -6135,7 +6135,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var grouped = getTinhCongGroups(filtered, year, month, numDays);
     var headers = ['Cửa hàng','Mã NV','Tên nhân viên','Chức vụ','Hộ KD','Hệ số chia thưởng',
       'Số giờ Thực hiện','Số giờ công chuẩn','Giờ OT','Số tiền OT','Tiền công','Tổng lương',
-      'Lương CB','Chuyên cần','Điện thoại','Xăng xe','Hỗ trợ kiêm nhiệm','KPIs khác','Tổng lương thỏa thuận'];
+      'Lương CB','Chuyên cần','Điện thoại','Xăng xe','Hỗ trợ kiêm nhiệm','KPIs khác','Tổng lương thỏa thuận','Trạng thái đóng bảo hiểm'];
     var data = [headers];
     grouped.storeNames.forEach(function(storeName){
       grouped.groups[storeName].forEach(function(e){
@@ -6145,7 +6145,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var tiLeThuongVal = (jtRow && jtRow.tiLeThuong !== undefined && jtRow.tiLeThuong !== null && jtRow.tiLeThuong !== '') ? jtRow.tiLeThuong : '';
         data.push([storeName, e.maNV, e.hoTen, e.chucDanh||'', e.hoKinhDoanh||'', tiLeThuongVal,
           stats.soGioThucHien, stats.soGioCongChuan, stats.gioOT, stats.tienOT, stats.tienCong, stats.tongLuong,
-          sr.luongCB, sr.chuyenCan, sr.dienThoai, sr.xangXe, sr.hoTroKiemNhiem, sr.kpiKhac, sr.tongLuong]);
+          sr.luongCB, sr.chuyenCan, sr.dienThoai, sr.xangXe, sr.hoTroKiemNhiem, sr.kpiKhac, sr.tongLuong, sr.baoHiem]);
       });
     });
     var ws = XLSX.utils.aoa_to_sheet(data);
