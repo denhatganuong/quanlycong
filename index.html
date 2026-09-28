@@ -939,6 +939,7 @@
               <th data-key="hoTroKiemNhiem" style="text-align:right;">Hỗ trợ K.nhiệm<span class="sort-ind">↕</span></th>
               <th data-key="kpiKhac" style="text-align:right;">KPIs khác<span class="sort-ind">↕</span></th>
               <th data-key="tongLuong" style="text-align:right;">Tổng lương<span class="sort-ind">↕</span></th>
+              <th style="text-align:left;">Bảo hiểm</th>
             </tr>
           </thead>
           <tbody id="salaryTbody"></tbody>
@@ -4596,11 +4597,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var hoTroKiemNhiem = Number(rec.hoTroKiemNhiem) || 0;
     var kpiKhac = Number(rec.kpiKhac) || 0;
     var tongLuong = luongCB + chuyenCan + dienThoai + xangXe + hoTroKiemNhiem + kpiKhac;
+    var baoHiem = rec.baoHiem || 'Chưa Tham Gia';
     var target = Number(e.mucLuong) || 0;
     return {
       maNV: e.maNV, hoTen: e.hoTen, cuaHang: e.chiNhanh,
       luongCB: luongCB, chuyenCan: chuyenCan, dienThoai: dienThoai, xangXe: xangXe,
-      hoTroKiemNhiem: hoTroKiemNhiem, kpiKhac: kpiKhac, tongLuong: tongLuong,
+      hoTroKiemNhiem: hoTroKiemNhiem, kpiKhac: kpiKhac, tongLuong: tongLuong, baoHiem: baoHiem,
       target: target, isMatch: (tongLuong === target)
     };
   }
@@ -4637,6 +4639,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ---------- Salary allocation: rendering ---------- */
   function salaryCellInput(field, val){
     return '<td><input class="cell-input" type="number" step="1000" min="0" data-field="'+field+'" value="'+(val||0)+'"></td>';
+  }
+  var BAO_HIEM_OPTIONS = ['Chưa Tham Gia', 'Đã Tham Gia', 'Cty Hỗ Trợ'];
+  var BAO_HIEM_STYLE = {
+    'Chưa Tham Gia': 'background:var(--surface-2);color:var(--ink-soft);',
+    'Đã Tham Gia': 'background:var(--brand-soft);color:var(--brand-dark);',
+    'Cty Hỗ Trợ': 'background:var(--gold-soft);color:var(--gold-dark);'
+  };
+  function salaryBaoHiemSelect(val){
+    var v = val || 'Chưa Tham Gia';
+    return '<td><select class="cell-select" data-field="baoHiem" style="'+(BAO_HIEM_STYLE[v]||'')+'border-radius:8px;padding:5px 8px;font-size:12.5px;font-weight:560;border:1px solid var(--border);">' +
+      BAO_HIEM_OPTIONS.map(function(o){ return '<option value="'+escapeHtml(o)+'"'+(o===v?' selected':'')+'>'+escapeHtml(o)+'</option>'; }).join('') +
+    '</select></td>';
   }
 
   function renderSalaryTable(){
@@ -4685,6 +4699,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         salaryCellInput('hoTroKiemNhiem', r.hoTroKiemNhiem) +
         salaryCellInput('kpiKhac', r.kpiKhac) +
         totalCell +
+        salaryBaoHiemSelect(r.baoHiem) +
       '</tr>';
     }).join('');
     updateSalarySortIndicators();
@@ -4775,13 +4790,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   });
   document.getElementById('salaryTbody').addEventListener('change', async function(ev){
     var input = ev.target.closest('.cell-input');
-    if(!input) return;
-    var row = input.closest('tr');
+    var select = ev.target.closest('.cell-select');
+    if(!input && !select) return;
+    var el = input || select;
+    var row = el.closest('tr');
     var maNV = row.dataset.manv;
-    var val = input.value === '' ? 0 : Number(input.value);
-    if(isNaN(val) || val < 0) val = 0;
-    input.value = val;
-    var field = input.dataset.field;
+    var field = el.dataset.field;
+    var val;
+    if(input){
+      val = input.value === '' ? 0 : Number(input.value);
+      if(isNaN(val) || val < 0) val = 0;
+      input.value = val;
+    } else {
+      val = select.value;
+      select.setAttribute('style', (BAO_HIEM_STYLE[val]||'')+'border-radius:8px;padding:5px 8px;font-size:12.5px;font-weight:560;border:1px solid var(--border);');
+    }
     var key = maNV.toLowerCase();
     await mutateStateKeySafe('salaryAllocations', function(fresh){
       if(!fresh[key]) fresh[key] = {};
@@ -4802,10 +4825,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('btnExportSalary').addEventListener('click', function(){
     var rows = buildSalaryRows();
     if(rows.length === 0){ showToast('Không có dữ liệu để xuất.', true); return; }
-    var headers = ['Mã NV','Họ tên','Cửa hàng','Lương CB','Chuyên cần','Điện thoại','Xăng xe','Hỗ trợ K.nhiệm','KPIs khác','Tổng lương'];
+    var headers = ['Mã NV','Họ tên','Cửa hàng','Lương CB','Chuyên cần','Điện thoại','Xăng xe','Hỗ trợ K.nhiệm','KPIs khác','Tổng lương','Bảo hiểm'];
     var data = [headers];
     rows.forEach(function(r){
-      data.push([r.maNV, r.hoTen, r.cuaHang, r.luongCB, r.chuyenCan, r.dienThoai, r.xangXe, r.hoTroKiemNhiem, r.kpiKhac, r.tongLuong]);
+      data.push([r.maNV, r.hoTen, r.cuaHang, r.luongCB, r.chuyenCan, r.dienThoai, r.xangXe, r.hoTroKiemNhiem, r.kpiKhac, r.tongLuong, r.baoHiem]);
     });
     var ws = XLSX.utils.aoa_to_sheet(data);
     ws['!cols'] = headers.map(function(){ return {wch:16}; });
