@@ -6133,7 +6133,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return;
     }
     var grouped = getTinhCongGroups(filtered, year, month, numDays);
-    var headers = ['Cửa hàng','Mã NV','Tên nhân viên','Chức vụ','Hộ KD','Hệ số chia thưởng',
+    var headers = ['Cửa hàng','Loại cửa hàng','Mã NV','Tên nhân viên','Chức vụ','Hộ KD','Hệ số chia thưởng',
       'Số giờ Thực hiện','Số giờ công chuẩn','Giờ OT','Số tiền OT','Tiền công','Tổng lương',
       'Lương CB','Chuyên cần','Điện thoại','Xăng xe','Hỗ trợ kiêm nhiệm','KPIs khác','Tổng lương thỏa thuận','Trạng thái đóng bảo hiểm'];
     var data = [headers];
@@ -6143,7 +6143,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var sr = buildSalaryRow(e); // lấy nguyên từ tab Phân bổ lương, không tính toán lại
         var jtRow = getJobTitleFor(e.chucDanh);
         var tiLeThuongVal = (jtRow && jtRow.tiLeThuong !== undefined && jtRow.tiLeThuong !== null && jtRow.tiLeThuong !== '') ? jtRow.tiLeThuong : '';
-        data.push([storeName, e.maNV, e.hoTen, e.chucDanh||'', e.hoKinhDoanh||'', tiLeThuongVal,
+        var loaiCuaHang = (storeName === e.chiNhanh) ? 'Cửa hàng chính' : 'Cửa hàng hỗ trợ (mượn)';
+        data.push([storeName, loaiCuaHang, e.maNV, e.hoTen, e.chucDanh||'', e.hoKinhDoanh||'', tiLeThuongVal,
           stats.soGioThucHien, stats.soGioCongChuan, stats.gioOT, stats.tienOT, stats.tienCong, stats.tongLuong,
           sr.luongCB, sr.chuyenCan, sr.dienThoai, sr.xangXe, sr.hoTroKiemNhiem, sr.kpiKhac, sr.tongLuong, sr.baoHiem]);
       });
