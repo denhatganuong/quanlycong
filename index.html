@@ -964,6 +964,8 @@
     <div class="schedule-shell">
       <div class="schedule-sidebar">
         <p class="schedule-sidebar-title">Danh sách cửa hàng</p>
+        <input type="text" id="scheduleStoreSearch" placeholder="🔎 Tìm cửa hàng..." autocomplete="off"
+          style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
         <div id="scheduleStoreList"></div>
       </div>
 
@@ -5073,7 +5075,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       state.scheduleSelectedStore = storeList[0].tenCuaHang;
     }
     var prevWeekStart = addDaysISO(getWeekStartISO(todayISO()), -7);
+    var searchQ = (document.getElementById('scheduleStoreSearch').value || '').trim().toLowerCase();
     var sorted = storeList.slice().sort(function(a,b){ return (a.tenCuaHang||'').localeCompare(b.tenCuaHang||'', 'vi'); });
+    if(searchQ){
+      sorted = sorted.filter(function(s){ return (s.tenCuaHang||'').toLowerCase().indexOf(searchQ) !== -1; });
+    }
+    if(sorted.length === 0){
+      list.innerHTML = '<p style="padding:10px;font-size:12.5px;color:var(--ink-faint);">Không tìm thấy cửa hàng nào khớp "'+escapeHtml(searchQ)+'".</p>';
+      return;
+    }
     list.innerHTML = sorted.map(function(s){
       var count = getStoreEmployees(s.tenCuaHang).length;
       var active = s.tenCuaHang === state.scheduleSelectedStore;
@@ -5086,6 +5096,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '</button>';
     }).join('');
   }
+  document.getElementById('scheduleStoreSearch').addEventListener('input', function(){
+    renderScheduleSidebar();
+  });
   document.getElementById('scheduleStoreList').addEventListener('click', function(ev){
     var btn = ev.target.closest('.schedule-store-item');
     if(!btn) return;
