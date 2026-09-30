@@ -1219,28 +1219,38 @@
 <div id="viewLichQuanLy" style="display:none;">
   <div id="lqlNoLink" style="display:none;" class="empty-state">
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
-    <h3>Tài khoản chưa liên kết với nhân viên nào</h3>
-    <p>Báo Admin vào tab Phân quyền, mở lại tài khoản của bạn và chọn đúng nhân viên ở ô "Liên kết với nhân viên".</p>
+    <h3>Chưa có quản lý nào để hiển thị</h3>
+    <p>Vào tab Khai báo → Cửa hàng, gán "Quản lý trực tiếp" cho từng cửa hàng trước.</p>
   </div>
-  <div id="lqlContent" style="display:none;">
-    <div class="toolbar" style="align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-      <div>
-        <h2 style="margin:0;font-size:16px;" id="lqlEmpName">—</h2>
-        <p style="margin:2px 0 0;font-size:12.5px;color:var(--ink-soft);" id="lqlEmpSub">—</p>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button type="button" class="btn btn-ghost btn-sm" id="lqlPrevMonth">‹ Tháng trước</button>
-        <span id="lqlMonthLabel" style="font-weight:650;font-size:14px;min-width:110px;text-align:center;"></span>
-        <button type="button" class="btn btn-ghost btn-sm" id="lqlNextMonth">Tháng sau ›</button>
-      </div>
-      <div style="display:flex;gap:16px;">
-        <div style="text-align:right;">
-          <div style="font-size:11px;color:var(--ink-faint);">Tổng giờ công tháng</div>
-          <div style="font-size:18px;font-weight:700;color:var(--brand-dark);" id="lqlMonthTotal">0h</div>
+  <div id="lqlShell" style="display:none;" class="schedule-shell">
+    <div id="lqlSidebar" class="schedule-sidebar" style="display:none;">
+      <p class="schedule-sidebar-title">Danh sách Quản lý</p>
+      <input type="text" id="lqlManagerSearch" placeholder="🔎 Tìm quản lý..." autocomplete="off"
+        style="width:100%;box-sizing:border-box;padding:8px 10px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;">
+      <div id="lqlManagerList"></div>
+    </div>
+    <div class="schedule-main">
+      <div id="lqlContent" style="display:none;">
+        <div class="toolbar" style="align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <div>
+            <h2 style="margin:0;font-size:16px;" id="lqlEmpName">—</h2>
+            <p style="margin:2px 0 0;font-size:12.5px;color:var(--ink-soft);" id="lqlEmpSub">—</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" id="lqlPrevMonth">‹ Tháng trước</button>
+            <span id="lqlMonthLabel" style="font-weight:650;font-size:14px;min-width:110px;text-align:center;"></span>
+            <button type="button" class="btn btn-ghost btn-sm" id="lqlNextMonth">Tháng sau ›</button>
+          </div>
+          <div style="display:flex;gap:16px;">
+            <div style="text-align:right;">
+              <div style="font-size:11px;color:var(--ink-faint);">Tổng giờ công tháng</div>
+              <div style="font-size:18px;font-weight:700;color:var(--brand-dark);" id="lqlMonthTotal">0h</div>
+            </div>
+          </div>
         </div>
+        <div id="lqlCalendar" style="margin-top:14px;"></div>
       </div>
     </div>
-    <div id="lqlCalendar" style="margin-top:14px;"></div>
   </div>
 </div>
 
@@ -3106,9 +3116,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(!perm || !perm.maNV) return null;
     return state.employees.find(function(e){ return e.maNV === perm.maNV; }) || null;
   }
+  function getAllManagers(){
+    var managerMaNVSet = {};
+    state.stores.forEach(function(s){ if(s.quanLyTrucTiep) managerMaNVSet[s.quanLyTrucTiep] = true; });
+    return state.employees.filter(function(e){ return managerMaNVSet[e.maNV]; })
+      .sort(function(a,b){ return (a.hoTen||'').localeCompare(b.hoTen||'', 'vi'); });
+  }
 
   var lqlSelectedDate = null;
   var lqlOffActive = false;
+  var lqlActiveEmp = null; // nhân viên đang xem/sửa lịch (chính mình, hoặc quản lý đang chọn ở sidebar nếu là admin/HR)
 
   function lqlMonthDates(year, month){
     var first = new Date(year, month - 1, 1);
@@ -3128,14 +3145,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return weeks;
   }
 
-  function renderLichQuanLy(){
-    var emp = getCurrentUserEmployee();
-    if(!emp){
-      document.getElementById('lqlNoLink').style.display = 'flex';
-      document.getElementById('lqlContent').style.display = 'none';
+  function renderLqlManagerList(){
+    var listEl = document.getElementById('lqlManagerList');
+    var managers = getAllManagers();
+    var q = (document.getElementById('lqlManagerSearch').value || '').trim().toLowerCase();
+    var filtered = q ? managers.filter(function(e){
+      return (e.hoTen && e.hoTen.toLowerCase().indexOf(q) !== -1) || (e.maNV && e.maNV.toLowerCase().indexOf(q) !== -1);
+    }) : managers;
+
+    if(!state.lqlSelectedManagerMaNV || !managers.find(function(e){ return e.maNV === state.lqlSelectedManagerMaNV; })){
+      state.lqlSelectedManagerMaNV = managers.length ? managers[0].maNV : null;
+    }
+    if(filtered.length === 0){
+      listEl.innerHTML = '<p style="padding:10px;font-size:12.5px;color:var(--ink-faint);">Không tìm thấy quản lý nào khớp.</p>';
       return;
     }
-    document.getElementById('lqlNoLink').style.display = 'none';
+    listEl.innerHTML = filtered.map(function(e){
+      var active = e.maNV === state.lqlSelectedManagerMaNV;
+      return '<button type="button" class="schedule-store-item'+(active?' active':'')+'" data-manv="'+escapeHtml(e.maNV)+'">' +
+        escapeHtml(e.hoTen||e.maNV) +
+        '<span class="sub">'+escapeHtml(e.maNV)+' · '+escapeHtml(e.chiNhanh||'—')+'</span>' +
+      '</button>';
+    }).join('');
+  }
+
+  function renderLqlCalendarFor(emp){
+    lqlActiveEmp = emp;
     document.getElementById('lqlContent').style.display = '';
     document.getElementById('lqlEmpName').textContent = emp.hoTen || emp.maNV;
     document.getElementById('lqlEmpSub').textContent = emp.maNV + ' · ' + (emp.chucDanh||'—') + ' · Chi nhánh gốc: ' + (emp.chiNhanh||'—');
@@ -3191,6 +3226,42 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('lqlMonthTotal').textContent = fmtHoursPlain(monthTotal) + 'h';
   }
 
+  function renderLichQuanLy(){
+    var selfEmp = getCurrentUserEmployee();
+    if(selfEmp){
+      // Chế độ TỰ XEM: quản lý chỉ thấy đúng lịch của chính mình, không có sidebar chọn người khác.
+      document.getElementById('lqlNoLink').style.display = 'none';
+      document.getElementById('lqlShell').style.display = '';
+      document.getElementById('lqlSidebar').style.display = 'none';
+      renderLqlCalendarFor(selfEmp);
+      return;
+    }
+    // Chế độ XEM TẤT CẢ (admin/HR — tài khoản không gắn với 1 nhân viên cụ thể):
+    // hiện sidebar danh sách toàn bộ Quản lý, chọn ai xem lịch người đó, giống hệt cách chọn cửa hàng.
+    var managers = getAllManagers();
+    if(managers.length === 0){
+      document.getElementById('lqlNoLink').style.display = 'flex';
+      document.getElementById('lqlShell').style.display = 'none';
+      return;
+    }
+    document.getElementById('lqlNoLink').style.display = 'none';
+    document.getElementById('lqlShell').style.display = '';
+    document.getElementById('lqlSidebar').style.display = '';
+    renderLqlManagerList();
+    var selected = managers.find(function(e){ return e.maNV === state.lqlSelectedManagerMaNV; }) || managers[0];
+    renderLqlCalendarFor(selected);
+  }
+
+  document.getElementById('lqlManagerSearch').addEventListener('input', function(){
+    renderLqlManagerList();
+  });
+  document.getElementById('lqlManagerList').addEventListener('click', function(ev){
+    var btn = ev.target.closest('.schedule-store-item');
+    if(!btn) return;
+    state.lqlSelectedManagerMaNV = btn.dataset.manv;
+    renderLichQuanLy();
+  });
+
   document.getElementById('lqlPrevMonth').addEventListener('click', function(){
     var m = state.lqlMonth - 1, y = state.lqlYear;
     if(m < 1){ m = 12; y -= 1; }
@@ -3212,10 +3283,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   var lqlDayOverlay = document.getElementById('lqlDayOverlay');
   function openLqlDayModal(dateISO){
-    var emp = getCurrentUserEmployee();
+    var emp = lqlActiveEmp;
     if(!emp) return;
     lqlSelectedDate = dateISO;
-    document.getElementById('lqlDayTitle').textContent = 'Xếp lịch ngày ' + dateISO.slice(8,10) + '/' + dateISO.slice(5,7);
+    document.getElementById('lqlDayTitle').textContent = (emp.hoTen||emp.maNV) + ' — Xếp lịch ngày ' + dateISO.slice(8,10) + '/' + dateISO.slice(5,7);
     document.getElementById('e_lqlDay').textContent = '';
 
     var entry = getScheduleEntry(emp.maNV, dateISO);
@@ -3248,7 +3319,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   });
 
   document.getElementById('lqlDaySave').addEventListener('click', async function(){
-    var emp = getCurrentUserEmployee();
+    var emp = lqlActiveEmp;
     if(!emp || !lqlSelectedDate) return;
     var store = document.getElementById('lql_store').value;
     if(!store){
@@ -3280,10 +3351,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     saveBtn.textContent = 'Lưu';
     showToast('Đã lưu lịch làm việc.');
     closeLqlDayModal();
-    renderLichQuanLy();
+    renderLqlCalendarFor(emp);
   });
   document.getElementById('lqlDayClear').addEventListener('click', async function(){
-    var emp = getCurrentUserEmployee();
+    var emp = lqlActiveEmp;
     if(!emp || !lqlSelectedDate) return;
     var clearBtn = document.getElementById('lqlDayClear');
     clearBtn.disabled = true;
@@ -3294,7 +3365,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     clearBtn.textContent = 'Xóa ngày này';
     showToast('Đã xóa lịch ngày này.');
     closeLqlDayModal();
-    renderLichQuanLy();
+    renderLqlCalendarFor(emp);
   });
 
   /* ---------- Cập nhật thông tin nhân sự (Request/Duyệt) ---------- */
