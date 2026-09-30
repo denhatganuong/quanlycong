@@ -1256,29 +1256,49 @@
 
 <!-- Lịch Quản lý: sửa 1 ngày -->
 <div class="overlay" id="lqlDayOverlay">
-  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="lqlDayTitle">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="lqlDayTitle">
     <div class="modal-head">
       <h2 id="lqlDayTitle">Xếp lịch ngày</h2>
       <button class="close-x" id="lqlDayClose" aria-label="Đóng">✕</button>
     </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-field full">
-          <label for="lql_store">Cửa hàng làm việc <span class="req">*</span></label>
-          <select id="lql_store"></select>
+    <div class="modal-body" style="overflow:visible;max-height:none;">
+      <div class="form-field full" style="margin-bottom:14px;">
+        <label for="lql_store">Cửa hàng làm việc <span class="req">*</span></label>
+        <select id="lql_store"></select>
+      </div>
+      <div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="form-field">
+          <label><span class="cat-dot tag-cat1"></span> Ca 1</label>
+          <div class="ca-picker" data-prefix="lqlCa1">
+            <button type="button" class="ca-picker-trigger" id="lqlCa1Trigger">— Trống</button>
+            <div class="ca-picker-panel" id="lqlCa1Panel"></div>
+            <select id="lqlCa1" class="visually-hidden"></select>
+          </div>
         </div>
         <div class="form-field">
-          <label for="lql_ca1">Ca 1</label>
-          <select id="lql_ca1"><option value="">— Trống —</option></select>
+          <label><span class="cat-dot tag-cat2"></span> Ca 2 (tuỳ chọn)</label>
+          <div class="ca-picker" data-prefix="lqlCa2">
+            <button type="button" class="ca-picker-trigger" id="lqlCa2Trigger">— Trống</button>
+            <div class="ca-picker-panel" id="lqlCa2Panel"></div>
+            <select id="lqlCa2" class="visually-hidden"></select>
+          </div>
         </div>
         <div class="form-field">
-          <label for="lql_ca2">Ca 2 (tuỳ chọn)</label>
-          <select id="lql_ca2"><option value="">— Trống —</option></select>
+          <label><span class="cat-dot tag-catsp"></span> Ca đặc biệt (tuỳ chọn)</label>
+          <div class="ca-picker" data-prefix="lqlCa3">
+            <button type="button" class="ca-picker-trigger" id="lqlCa3Trigger">— Trống</button>
+            <div class="ca-picker-panel" id="lqlCa3Panel"></div>
+            <select id="lqlCa3" class="visually-hidden"></select>
+          </div>
         </div>
       </div>
-      <button type="button" class="off-toggle-btn" id="lql_offToggle" style="margin-top:12px;">
-        <span class="off-toggle-dot"></span> OFF — Đánh dấu ngày nghỉ (không làm việc)
-      </button>
+      <p id="lqlCaError" style="color:var(--danger);font-size:12.5px;margin:12px 0 0;display:none;">⚠ Chỉ được chọn tối đa 2 ca cùng lúc trong 1 ngày.</p>
+      <p style="font-size:11.5px;color:var(--ink-faint);margin:8px 0 0;">Chọn tối đa 2 trong 3 cột ở trên cho cùng một ngày.</p>
+      <div style="border-top:1px solid var(--border);margin:16px 0 0;padding-top:14px;">
+        <button type="button" class="off-toggle-btn" id="lql_offToggle">
+          <span class="off-toggle-dot"></span> OFF — Đánh dấu ngày nghỉ (không làm việc)
+        </button>
+      </div>
       <div class="err" id="e_lqlDay" style="margin-top:8px;"></div>
     </div>
     <div class="modal-foot">
@@ -3129,8 +3149,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function lqlMonthDates(year, month){
     var first = new Date(year, month - 1, 1);
-    var startOffset = (first.getDay() + 6) % 7; // 0 = Thứ 2
-    var gridStart = new Date(year, month - 1, 1 - startOffset);
+    var dow = first.getDay(); // 0=CN,1=T2,2=T3...6=T7
+    var offset = (dow - 2 + 7) % 7; // lùi về đúng Thứ 3 gần nhất <= ngày 1
+    var gridStart = new Date(year, month - 1, 1 - offset);
     var weeks = [];
     for(var w = 0; w < 6; w++){
       var weekDates = [];
@@ -3143,6 +3164,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(w >= 3 && new Date(weekDates[6] + 'T00:00:00') >= new Date(year, month, 0)) break;
     }
     return weeks;
+  }
+
+  // Xác định các cặp (cửa hàng, tuần T2-CN thật sự dùng để tính lương) mà dòng lịch (Thứ 3 -> Thứ 2) này chạm tới.
+  // Chốt công ở đây sẽ khoá đúng các cặp này để Tính công vẫn nhận diện đúng như khi chốt bên Xếp lịch cửa hàng.
+  function lqlRowLockPairs(maNV, inMonthDates){
+    var pairs = {};
+    inMonthDates.forEach(function(d){
+      var entry = getScheduleEntry(maNV, d);
+      if(entry && entry.store && !entry.off){
+        pairs[entry.store + '|' + getWeekStartISO(d)] = true;
+      }
+    });
+    return Object.keys(pairs);
   }
 
   function renderLqlManagerList(){
@@ -3185,46 +3219,98 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     var weeks = lqlMonthDates(year, month);
     var monthTotal = 0;
-    var WD_LABELS = ['T2','T3','T4','T5','T6','T7','CN'];
+    var WD_LABELS = ['T3','T4','T5','T6','T7','CN','T2'];
 
-    var html = '<div class="table-scroll"><table class="emp-table lql-cal" style="min-width:920px;">';
-    html += '<thead><tr>' + WD_LABELS.map(function(l){ return '<th style="width:12%;">'+l+'</th>'; }).join('') + '<th style="width:16%;">Tổng giờ/tuần</th></tr></thead><tbody>';
+    var html = '<div class="table-scroll"><table class="emp-table lql-cal" style="min-width:960px;border-collapse:separate;border-spacing:0;">';
+    html += '<thead><tr>' + WD_LABELS.map(function(l){ return '<th style="width:11.5%;text-align:center;">'+l+'</th>'; }).join('') + '<th style="width:15%;">Tuần (T3 → T2)</th></tr></thead><tbody>';
 
     weeks.forEach(function(weekDates){
-      var weekTotal = computeWeeklyHours(emp.maNV, weekDates);
+      var inMonthDates = weekDates.filter(function(d){ return Number(d.slice(5,7)) === month; });
+      if(inMonthDates.length === 0) return; // tuần này không có ngày nào thuộc tháng đang xem -> bỏ hẳn dòng
+      var weekTotal = computeWeeklyHours(emp.maNV, inMonthDates);
       monthTotal += weekTotal;
+      var lockKeys = lqlRowLockPairs(emp.maNV, inMonthDates);
+      var hasData = lockKeys.length > 0;
+      var allLocked = hasData && lockKeys.every(function(k){ return !!state.scheduleLocks[k]; });
+
       html += '<tr>';
       weekDates.forEach(function(d){
         var inMonth = (Number(d.slice(5,7)) === month);
-        var dayNum = Number(d.slice(8,10));
         if(!inMonth){
-          html += '<td style="background:var(--surface-2);color:var(--ink-faint);vertical-align:top;padding:6px;font-size:11px;">'+dayNum+'</td>';
+          html += '<td style="background:var(--surface-2);border:1px solid var(--border);"></td>';
           return;
         }
+        var dayNum = Number(d.slice(8,10));
         var entry = getScheduleEntry(emp.maNV, d);
         var isToday = (d === todayISO());
-        var cellStyle = 'vertical-align:top;padding:6px;cursor:pointer;min-height:64px;' + (isToday ? 'background:var(--brand-soft);' : '');
-        var inner = '<div style="font-size:11px;font-weight:650;color:var(--ink-soft);margin-bottom:4px;">'+dayNum+'</div>';
+        var rowLocked = entry && entry.store && !entry.off && state.scheduleLocks[entry.store + '|' + getWeekStartISO(d)];
+        var cellStyle = 'vertical-align:top;padding:8px;height:76px;border:1px solid var(--border);' +
+          (isToday ? 'background:var(--brand-soft);' : 'background:#fff;') +
+          (rowLocked ? 'cursor:not-allowed;' : 'cursor:pointer;');
+        var inner = '<div style="font-size:12px;font-weight:700;color:'+(isToday?'var(--brand-dark)':'var(--ink-soft)')+';margin-bottom:5px;">'+dayNum+'</div>';
         if(entry && entry.off){
-          inner += '<span style="display:inline-block;background:var(--slate);color:#fff;font-size:10.5px;padding:2px 6px;border-radius:5px;">OFF</span>';
+          inner += '<span style="display:inline-block;background:var(--slate);color:#fff;font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:5px;">OFF</span>';
         } else if(entry && entry.store){
           var shiftsArr = getScheduleShiftObjects(emp.maNV, d);
-          inner += shiftsArr.map(function(o){
-            return '<div style="font-size:10.5px;background:var(--brand-soft);color:var(--brand-dark);border-radius:5px;padding:1px 5px;margin-bottom:2px;display:inline-block;">'+escapeHtml(o.code)+'</div>';
-          }).join('<br>');
-          inner += '<div style="font-size:10px;color:var(--ink-faint);margin-top:2px;">'+escapeHtml(entry.store)+'</div>';
+          inner += '<div style="display:flex;flex-wrap:wrap;gap:3px;">' + shiftsArr.map(function(o){
+            return '<span style="font-size:10.5px;font-weight:650;background:var(--brand-soft);color:var(--brand-dark);border-radius:5px;padding:1px 6px;">'+escapeHtml(o.code)+'</span>';
+          }).join('') + '</div>';
+          inner += '<div style="font-size:10px;color:var(--ink-faint);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(entry.store)+'</div>';
         } else {
           inner += '<span style="font-size:11px;color:var(--ink-faint);">+ Xếp lịch</span>';
         }
         html += '<td class="lql-day-cell" data-date="'+d+'" style="'+cellStyle+'">'+inner+'</td>';
       });
-      html += '<td style="text-align:center;font-weight:650;vertical-align:middle;">'+fmtHoursPlain(weekTotal)+'</td>';
+
+      var lockBtnHtml;
+      if(!hasData){
+        lockBtnHtml = '<span style="font-size:11px;color:var(--ink-faint);">Chưa có lịch</span>';
+      } else if(allLocked){
+        lockBtnHtml = '<button type="button" class="btn btn-ghost btn-sm lql-unlock-btn" data-keys="'+escapeHtml(lockKeys.join(','))+'" style="width:100%;">🔓 Đã chốt · Mở lại</button>';
+      } else {
+        lockBtnHtml = '<button type="button" class="btn btn-sm lql-lock-btn" data-keys="'+escapeHtml(lockKeys.join(','))+'" style="width:100%;background:var(--gold);color:#fff;border:none;">🔒 Chốt công</button>';
+      }
+      html += '<td style="text-align:center;vertical-align:middle;padding:8px;border:1px solid var(--border);background:var(--surface-2);">' +
+        '<div style="font-weight:700;font-size:14px;margin-bottom:6px;">'+fmtHoursPlain(weekTotal)+'</div>' +
+        lockBtnHtml +
+      '</td>';
       html += '</tr>';
     });
     html += '</tbody></table></div>';
     document.getElementById('lqlCalendar').innerHTML = html;
     document.getElementById('lqlMonthTotal').textContent = fmtHoursPlain(monthTotal) + 'h';
   }
+
+  document.getElementById('lqlCalendar').addEventListener('click', async function(ev){
+    var lockBtn = ev.target.closest('.lql-lock-btn');
+    var unlockBtn = ev.target.closest('.lql-unlock-btn');
+    if(lockBtn){
+      var keys = lockBtn.dataset.keys.split(',');
+      if(!confirm('Xác nhận chốt công tuần này cho ' + (lqlActiveEmp ? (lqlActiveEmp.hoTen||lqlActiveEmp.maNV) : '') + '?')) return;
+      var nowIso = new Date().toISOString();
+      await mutateStateKeySafe('scheduleLocks', function(fresh){
+        keys.forEach(function(k){ fresh[k] = { lockedAt: nowIso }; });
+      });
+      showToast('Đã chốt công tuần này.');
+      renderLqlCalendarFor(lqlActiveEmp);
+      return;
+    }
+    if(unlockBtn){
+      var pass = window.prompt('Nhập mật khẩu để mở lại tuần đã chốt:');
+      if(pass === null) return;
+      if(pass !== UNLOCK_PASSWORD){
+        showToast('Sai mật khẩu, không mở được.', true);
+        return;
+      }
+      var ukeys = unlockBtn.dataset.keys.split(',');
+      await mutateStateKeySafe('scheduleLocks', function(fresh){
+        ukeys.forEach(function(k){ delete fresh[k]; });
+      });
+      showToast('Đã mở lại, có thể chỉnh sửa tuần này.');
+      renderLqlCalendarFor(lqlActiveEmp);
+      return;
+    }
+  });
 
   function renderLichQuanLy(){
     var selfEmp = getCurrentUserEmployee();
@@ -3278,7 +3364,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('lqlCalendar').addEventListener('click', function(ev){
     var cell = ev.target.closest('.lql-day-cell');
     if(!cell) return;
-    openLqlDayModal(cell.dataset.date);
+    var d = cell.dataset.date;
+    var emp = lqlActiveEmp;
+    var entry = emp ? getScheduleEntry(emp.maNV, d) : null;
+    if(entry && entry.store && !entry.off && isWeekLocked(entry.store, getWeekStartISO(d))){
+      showToast('Tuần này đã chốt công, cần mở lại trước khi sửa.', true);
+      return;
+    }
+    openLqlDayModal(d);
   });
 
   var lqlDayOverlay = document.getElementById('lqlDayOverlay');
@@ -3292,21 +3385,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var entry = getScheduleEntry(emp.maNV, dateISO);
     populateSelect(document.getElementById('lql_store'), getDeclaredChiNhanhNames(), (entry && entry.store) ? entry.store : (emp.chiNhanh||''), '-- Chọn cửa hàng --');
 
-    var shiftOptions = state.shifts.slice().sort(function(a,b){ return (a.maCa||'').localeCompare(b.maCa||''); }).map(function(s){ return s.maCa; });
-    var ca1Sel = document.getElementById('lql_ca1'), ca2Sel = document.getElementById('lql_ca2');
-    ca1Sel.innerHTML = '<option value="">— Trống —</option>' + shiftOptions.map(function(c){ return '<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>'; }).join('');
-    ca2Sel.innerHTML = '<option value="">— Trống —</option>' + shiftOptions.map(function(c){ return '<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>'; }).join('');
+    var currentCodes = getScheduleAssignment(emp.maNV, dateISO);
+    populateScheduleCatSelect('lqlCa1', 'Ca 1', currentCodes);
+    populateScheduleCatSelect('lqlCa2', 'Ca 2', currentCodes);
+    populateScheduleCatSelect('lqlCa3', 'Ca đặc biệt', currentCodes);
+    document.getElementById('lqlCaError').style.display = 'none';
 
     lqlOffActive = !!(entry && entry.off);
     document.getElementById('lql_offToggle').classList.toggle('active', lqlOffActive);
-
-    if(entry && Array.isArray(entry.shifts)){
-      var codes = entry.shifts.map(function(o){ return typeof o === 'string' ? o : o.code; });
-      ca1Sel.value = codes[0] || '';
-      ca2Sel.value = codes[1] || '';
-    } else {
-      ca1Sel.value = ''; ca2Sel.value = '';
-    }
+    setSchedulePickersDisabled(lqlOffActive);
     lqlDayOverlay.classList.add('show');
   }
   function closeLqlDayModal(){ lqlDayOverlay.classList.remove('show'); lqlSelectedDate = null; }
@@ -3316,6 +3403,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('lql_offToggle').addEventListener('click', function(){
     lqlOffActive = !lqlOffActive;
     this.classList.toggle('active', lqlOffActive);
+    setSchedulePickersDisabled(lqlOffActive);
   });
 
   document.getElementById('lqlDaySave').addEventListener('click', async function(){
@@ -3326,6 +3414,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       document.getElementById('e_lqlDay').textContent = 'Vui lòng chọn cửa hàng làm việc.';
       return;
     }
+    var LQL_CAT_SELECT_IDS = ['lqlCa1', 'lqlCa2', 'lqlCa3'];
+    var picked = LQL_CAT_SELECT_IDS.map(function(id){ return document.getElementById(id).value; })
+      .filter(function(v){ return v; });
+    if(!lqlOffActive && picked.length > 2){
+      document.getElementById('lqlCaError').style.display = 'block';
+      return;
+    }
+    document.getElementById('lqlCaError').style.display = 'none';
     var saveBtn = document.getElementById('lqlDaySave');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Đang lưu...';
@@ -3333,14 +3429,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(lqlOffActive){
       await saveScheduleMutation(function(fresh){ fresh[key] = { store: store, off: true }; });
     } else {
-      var c1 = document.getElementById('lql_ca1').value;
-      var c2 = document.getElementById('lql_ca2').value;
-      var codes = [c1, c2].filter(function(v){ return v; });
-      if(codes.length === 0){
+      if(picked.length === 0){
         await saveScheduleMutation(function(fresh){ delete fresh[key]; });
       } else {
         var prevObjs = getScheduleShiftObjects(emp.maNV, lqlSelectedDate);
-        var pickedObjs = codes.map(function(code){
+        var pickedObjs = picked.map(function(code){
           var prev = prevObjs.find(function(o){ return o.code === code; });
           return { code: code, task: prev ? prev.task : '' };
         });
@@ -6290,8 +6383,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
     });
     var rounded = Math.round(totalGio * 10) / 10;
-    var labelStr = (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + 'h';
-    return { type: hasSpecial ? 'special' : 'work', label: labelStr, hours: rounded };
+    var hkey = dateISO.slice(0,7);
+    var dayNum = Number(dateISO.slice(8,10));
+    var heSoNgay = Number((state.holidayMultipliers[hkey]||{})[dayNum]) || 1;
+    var effectiveRounded = Math.round(totalGio * heSoNgay * 10) / 10;
+    var labelStr = (effectiveRounded % 1 === 0 ? effectiveRounded.toFixed(0) : effectiveRounded.toFixed(1)) + 'h' + (heSoNgay !== 1 ? ' ×'+heSoNgay : '');
+    return { type: hasSpecial ? 'special' : 'work', label: labelStr, hours: effectiveRounded };
   }
   function getTinhCongFilteredEmployees(){
     var q = state.tcSearch.trim().toLowerCase();
@@ -6352,6 +6449,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     var soGioCongChuan = Math.max(0, numDays - soNgayNghi) * gioChuanNgay;
 
+    var hkey = year + '-' + pad2(month);
+    var hmap = state.holidayMultipliers[hkey] || {};
+
     var soGioThucHien = 0;
     for(var d = 1; d <= numDays; d++){
       var dateISO = tcDateISO(year, month, d);
@@ -6360,9 +6460,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(storeFilter && entry.store !== storeFilter) continue;
       var weekStart = getWeekStartISO(dateISO);
       if(!isWeekLocked(entry.store, weekStart)) continue;
+      var heSoNgay = Number(hmap[d]) || 1;
       getScheduleShiftObjects(e.maNV, dateISO).forEach(function(o){
         var shift = getShiftByCode(o.code);
-        if(shift) soGioThucHien += Number(shift.gio) || 0;
+        if(shift) soGioThucHien += (Number(shift.gio) || 0) * heSoNgay;
       });
     }
     soGioThucHien = Math.round(soGioThucHien * 100) / 100;
