@@ -696,6 +696,7 @@
     <button class="view-tab" id="tabSchedule" data-view="schedule">Xếp lịch cửa hàng</button>
     <button class="view-tab" id="tabTinhCong" data-view="tinhCong">Tính công</button>
     <button class="view-tab" id="tabCapNhatTT" data-view="capNhatTT">Cập nhật thông tin NS</button>
+    <button class="view-tab" id="tabLichQuanLy" data-view="lichQuanLy">Lịch Quản lý</button>
     <button class="view-tab" id="tabPhanQuyen" data-view="phanQuyen" style="display:none;">Phân quyền</button>
   </div>
 
@@ -1215,6 +1216,69 @@
   </div>
 </div>
 
+<div id="viewLichQuanLy" style="display:none;">
+  <div id="lqlNoLink" style="display:none;" class="empty-state">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+    <h3>Tài khoản chưa liên kết với nhân viên nào</h3>
+    <p>Báo Admin vào tab Phân quyền, mở lại tài khoản của bạn và chọn đúng nhân viên ở ô "Liên kết với nhân viên".</p>
+  </div>
+  <div id="lqlContent" style="display:none;">
+    <div class="toolbar" style="align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2 style="margin:0;font-size:16px;" id="lqlEmpName">—</h2>
+        <p style="margin:2px 0 0;font-size:12.5px;color:var(--ink-soft);" id="lqlEmpSub">—</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="lqlPrevMonth">‹ Tháng trước</button>
+        <span id="lqlMonthLabel" style="font-weight:650;font-size:14px;min-width:110px;text-align:center;"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="lqlNextMonth">Tháng sau ›</button>
+      </div>
+      <div style="display:flex;gap:16px;">
+        <div style="text-align:right;">
+          <div style="font-size:11px;color:var(--ink-faint);">Tổng giờ công tháng</div>
+          <div style="font-size:18px;font-weight:700;color:var(--brand-dark);" id="lqlMonthTotal">0h</div>
+        </div>
+      </div>
+    </div>
+    <div id="lqlCalendar" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- Lịch Quản lý: sửa 1 ngày -->
+<div class="overlay" id="lqlDayOverlay">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="lqlDayTitle">
+    <div class="modal-head">
+      <h2 id="lqlDayTitle">Xếp lịch ngày</h2>
+      <button class="close-x" id="lqlDayClose" aria-label="Đóng">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-field full">
+          <label for="lql_store">Cửa hàng làm việc <span class="req">*</span></label>
+          <select id="lql_store"></select>
+        </div>
+        <div class="form-field">
+          <label for="lql_ca1">Ca 1</label>
+          <select id="lql_ca1"><option value="">— Trống —</option></select>
+        </div>
+        <div class="form-field">
+          <label for="lql_ca2">Ca 2 (tuỳ chọn)</label>
+          <select id="lql_ca2"><option value="">— Trống —</option></select>
+        </div>
+      </div>
+      <button type="button" class="off-toggle-btn" id="lql_offToggle" style="margin-top:12px;">
+        <span class="off-toggle-dot"></span> OFF — Đánh dấu ngày nghỉ (không làm việc)
+      </button>
+      <div class="err" id="e_lqlDay" style="margin-top:8px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-danger" id="lqlDayClear" style="margin-right:auto;">Xóa ngày này</button>
+      <button type="button" class="btn btn-ghost" id="lqlDayCancel">Hủy</button>
+      <button type="button" class="btn btn-primary" id="lqlDaySave">Lưu</button>
+    </div>
+  </div>
+</div>
+
 <div id="viewPhanQuyen" style="display:none;">
   <div class="view-actions">
     <button class="btn btn-primary btn-sm" id="btnAddPermission">+ Thêm phân quyền</button>
@@ -1261,6 +1325,11 @@
             <div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px;">Tài khoản đăng nhập sẽ được tạo cùng lúc lưu phân quyền — nhớ gửi lại mật khẩu này cho nhân viên.</div>
           </div>
           <div class="form-field full">
+            <label for="pf_maNV">Liên kết với nhân viên (dùng cho tab "Lịch Quản lý")</label>
+            <select id="pf_maNV"></select>
+            <div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px;">Chọn đúng nhân viên tương ứng với tài khoản này — cần thiết nếu cấp quyền tab "Lịch Quản lý".</div>
+          </div>
+          <div class="form-field full">
             <label>Các tab được phép truy cập</label>
             <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;">
               <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="employees"> Nhân viên</label>
@@ -1269,6 +1338,7 @@
               <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" id="pf_tab_schedule" value="schedule"> Xếp lịch cửa hàng</label>
               <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="tinhCong"> Tính công</label>
               <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="capNhatTT"> Cập nhật thông tin NS</label>
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" class="pf-tab" value="lichQuanLy"> Lịch Quản lý</label>
             </div>
           </div>
           <div class="form-field full" id="pf_stores_wrap" style="display:none;">
@@ -2997,6 +3067,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(view === 'schedule'){ renderScheduleSidebar(); renderScheduleMain(); }
     if(view === 'tinhCong'){ renderTinhCong(); }
     if(view === 'capNhatTT'){ renderUpdateRequestTable(); }
+    if(view === 'lichQuanLy'){ renderLichQuanLy(); }
     if(view === 'phanQuyen'){ renderPermissionTable(); }
   }
   function switchView(view){
@@ -3007,6 +3078,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('viewSchedule').style.display = view === 'schedule' ? '' : 'none';
     document.getElementById('viewTinhCong').style.display = view === 'tinhCong' ? '' : 'none';
     document.getElementById('viewCapNhatTT').style.display = view === 'capNhatTT' ? '' : 'none';
+    document.getElementById('viewLichQuanLy').style.display = view === 'lichQuanLy' ? '' : 'none';
     document.getElementById('viewPhanQuyen').style.display = view === 'phanQuyen' ? '' : 'none';
     document.getElementById('tabEmployees').classList.toggle('active', view === 'employees');
     document.getElementById('tabJobTitles').classList.toggle('active', view === 'jobTitles');
@@ -3014,6 +3086,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('tabSchedule').classList.toggle('active', view === 'schedule');
     document.getElementById('tabTinhCong').classList.toggle('active', view === 'tinhCong');
     document.getElementById('tabCapNhatTT').classList.toggle('active', view === 'capNhatTT');
+    document.getElementById('tabLichQuanLy').classList.toggle('active', view === 'lichQuanLy');
     document.getElementById('tabPhanQuyen').classList.toggle('active', view === 'phanQuyen');
     renderViewContent(view);
   }
@@ -3023,7 +3096,206 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('tabSchedule').addEventListener('click', function(){ switchView('schedule'); });
   document.getElementById('tabTinhCong').addEventListener('click', function(){ switchView('tinhCong'); });
   document.getElementById('tabCapNhatTT').addEventListener('click', function(){ switchView('capNhatTT'); });
+  document.getElementById('tabLichQuanLy').addEventListener('click', function(){ switchView('lichQuanLy'); });
   document.getElementById('tabPhanQuyen').addEventListener('click', function(){ switchView('phanQuyen'); });
+
+  /* ---------- Lịch Quản lý (mỗi quản lý tự xếp lịch cho chính mình, dạng lịch tháng) ---------- */
+  function getCurrentUserEmployee(){
+    var username = (window.CURRENT_USERNAME || '').toLowerCase();
+    var perm = (state.userPermissions || {})[username];
+    if(!perm || !perm.maNV) return null;
+    return state.employees.find(function(e){ return e.maNV === perm.maNV; }) || null;
+  }
+
+  var lqlSelectedDate = null;
+  var lqlOffActive = false;
+
+  function lqlMonthDates(year, month){
+    var first = new Date(year, month - 1, 1);
+    var startOffset = (first.getDay() + 6) % 7; // 0 = Thứ 2
+    var gridStart = new Date(year, month - 1, 1 - startOffset);
+    var weeks = [];
+    for(var w = 0; w < 6; w++){
+      var weekDates = [];
+      for(var d = 0; d < 7; d++){
+        var dt = new Date(gridStart);
+        dt.setDate(gridStart.getDate() + w * 7 + d);
+        weekDates.push(dt.toISOString().slice(0,10));
+      }
+      weeks.push(weekDates);
+      if(w >= 3 && new Date(weekDates[6] + 'T00:00:00') >= new Date(year, month, 0)) break;
+    }
+    return weeks;
+  }
+
+  function renderLichQuanLy(){
+    var emp = getCurrentUserEmployee();
+    if(!emp){
+      document.getElementById('lqlNoLink').style.display = 'flex';
+      document.getElementById('lqlContent').style.display = 'none';
+      return;
+    }
+    document.getElementById('lqlNoLink').style.display = 'none';
+    document.getElementById('lqlContent').style.display = '';
+    document.getElementById('lqlEmpName').textContent = emp.hoTen || emp.maNV;
+    document.getElementById('lqlEmpSub').textContent = emp.maNV + ' · ' + (emp.chucDanh||'—') + ' · Chi nhánh gốc: ' + (emp.chiNhanh||'—');
+
+    if(!state.lqlYear || !state.lqlMonth){
+      var now = new Date();
+      state.lqlYear = now.getFullYear();
+      state.lqlMonth = now.getMonth() + 1;
+    }
+    var year = state.lqlYear, month = state.lqlMonth;
+    document.getElementById('lqlMonthLabel').textContent = 'Tháng ' + month + '/' + year;
+
+    var weeks = lqlMonthDates(year, month);
+    var monthTotal = 0;
+    var WD_LABELS = ['T2','T3','T4','T5','T6','T7','CN'];
+
+    var html = '<div class="table-scroll"><table class="emp-table lql-cal" style="min-width:920px;">';
+    html += '<thead><tr>' + WD_LABELS.map(function(l){ return '<th style="width:12%;">'+l+'</th>'; }).join('') + '<th style="width:16%;">Tổng giờ/tuần</th></tr></thead><tbody>';
+
+    weeks.forEach(function(weekDates){
+      var weekTotal = computeWeeklyHours(emp.maNV, weekDates);
+      monthTotal += weekTotal;
+      html += '<tr>';
+      weekDates.forEach(function(d){
+        var inMonth = (Number(d.slice(5,7)) === month);
+        var dayNum = Number(d.slice(8,10));
+        if(!inMonth){
+          html += '<td style="background:var(--surface-2);color:var(--ink-faint);vertical-align:top;padding:6px;font-size:11px;">'+dayNum+'</td>';
+          return;
+        }
+        var entry = getScheduleEntry(emp.maNV, d);
+        var isToday = (d === todayISO());
+        var cellStyle = 'vertical-align:top;padding:6px;cursor:pointer;min-height:64px;' + (isToday ? 'background:var(--brand-soft);' : '');
+        var inner = '<div style="font-size:11px;font-weight:650;color:var(--ink-soft);margin-bottom:4px;">'+dayNum+'</div>';
+        if(entry && entry.off){
+          inner += '<span style="display:inline-block;background:var(--slate);color:#fff;font-size:10.5px;padding:2px 6px;border-radius:5px;">OFF</span>';
+        } else if(entry && entry.store){
+          var shiftsArr = getScheduleShiftObjects(emp.maNV, d);
+          inner += shiftsArr.map(function(o){
+            return '<div style="font-size:10.5px;background:var(--brand-soft);color:var(--brand-dark);border-radius:5px;padding:1px 5px;margin-bottom:2px;display:inline-block;">'+escapeHtml(o.code)+'</div>';
+          }).join('<br>');
+          inner += '<div style="font-size:10px;color:var(--ink-faint);margin-top:2px;">'+escapeHtml(entry.store)+'</div>';
+        } else {
+          inner += '<span style="font-size:11px;color:var(--ink-faint);">+ Xếp lịch</span>';
+        }
+        html += '<td class="lql-day-cell" data-date="'+d+'" style="'+cellStyle+'">'+inner+'</td>';
+      });
+      html += '<td style="text-align:center;font-weight:650;vertical-align:middle;">'+fmtHoursPlain(weekTotal)+'</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('lqlCalendar').innerHTML = html;
+    document.getElementById('lqlMonthTotal').textContent = fmtHoursPlain(monthTotal) + 'h';
+  }
+
+  document.getElementById('lqlPrevMonth').addEventListener('click', function(){
+    var m = state.lqlMonth - 1, y = state.lqlYear;
+    if(m < 1){ m = 12; y -= 1; }
+    state.lqlMonth = m; state.lqlYear = y;
+    renderLichQuanLy();
+  });
+  document.getElementById('lqlNextMonth').addEventListener('click', function(){
+    var m = state.lqlMonth + 1, y = state.lqlYear;
+    if(m > 12){ m = 1; y += 1; }
+    state.lqlMonth = m; state.lqlYear = y;
+    renderLichQuanLy();
+  });
+
+  document.getElementById('lqlCalendar').addEventListener('click', function(ev){
+    var cell = ev.target.closest('.lql-day-cell');
+    if(!cell) return;
+    openLqlDayModal(cell.dataset.date);
+  });
+
+  var lqlDayOverlay = document.getElementById('lqlDayOverlay');
+  function openLqlDayModal(dateISO){
+    var emp = getCurrentUserEmployee();
+    if(!emp) return;
+    lqlSelectedDate = dateISO;
+    document.getElementById('lqlDayTitle').textContent = 'Xếp lịch ngày ' + dateISO.slice(8,10) + '/' + dateISO.slice(5,7);
+    document.getElementById('e_lqlDay').textContent = '';
+
+    var entry = getScheduleEntry(emp.maNV, dateISO);
+    populateSelect(document.getElementById('lql_store'), getDeclaredChiNhanhNames(), (entry && entry.store) ? entry.store : (emp.chiNhanh||''), '-- Chọn cửa hàng --');
+
+    var shiftOptions = state.shifts.slice().sort(function(a,b){ return (a.maCa||'').localeCompare(b.maCa||''); }).map(function(s){ return s.maCa; });
+    var ca1Sel = document.getElementById('lql_ca1'), ca2Sel = document.getElementById('lql_ca2');
+    ca1Sel.innerHTML = '<option value="">— Trống —</option>' + shiftOptions.map(function(c){ return '<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>'; }).join('');
+    ca2Sel.innerHTML = '<option value="">— Trống —</option>' + shiftOptions.map(function(c){ return '<option value="'+escapeHtml(c)+'">'+escapeHtml(c)+'</option>'; }).join('');
+
+    lqlOffActive = !!(entry && entry.off);
+    document.getElementById('lql_offToggle').classList.toggle('active', lqlOffActive);
+
+    if(entry && Array.isArray(entry.shifts)){
+      var codes = entry.shifts.map(function(o){ return typeof o === 'string' ? o : o.code; });
+      ca1Sel.value = codes[0] || '';
+      ca2Sel.value = codes[1] || '';
+    } else {
+      ca1Sel.value = ''; ca2Sel.value = '';
+    }
+    lqlDayOverlay.classList.add('show');
+  }
+  function closeLqlDayModal(){ lqlDayOverlay.classList.remove('show'); lqlSelectedDate = null; }
+  document.getElementById('lqlDayClose').addEventListener('click', closeLqlDayModal);
+  document.getElementById('lqlDayCancel').addEventListener('click', closeLqlDayModal);
+  lqlDayOverlay.addEventListener('click', function(ev){ if(ev.target === lqlDayOverlay) closeLqlDayModal(); });
+  document.getElementById('lql_offToggle').addEventListener('click', function(){
+    lqlOffActive = !lqlOffActive;
+    this.classList.toggle('active', lqlOffActive);
+  });
+
+  document.getElementById('lqlDaySave').addEventListener('click', async function(){
+    var emp = getCurrentUserEmployee();
+    if(!emp || !lqlSelectedDate) return;
+    var store = document.getElementById('lql_store').value;
+    if(!store){
+      document.getElementById('e_lqlDay').textContent = 'Vui lòng chọn cửa hàng làm việc.';
+      return;
+    }
+    var saveBtn = document.getElementById('lqlDaySave');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Đang lưu...';
+    var key = scheduleKey(emp.maNV, lqlSelectedDate);
+    if(lqlOffActive){
+      await saveScheduleMutation(function(fresh){ fresh[key] = { store: store, off: true }; });
+    } else {
+      var c1 = document.getElementById('lql_ca1').value;
+      var c2 = document.getElementById('lql_ca2').value;
+      var codes = [c1, c2].filter(function(v){ return v; });
+      if(codes.length === 0){
+        await saveScheduleMutation(function(fresh){ delete fresh[key]; });
+      } else {
+        var prevObjs = getScheduleShiftObjects(emp.maNV, lqlSelectedDate);
+        var pickedObjs = codes.map(function(code){
+          var prev = prevObjs.find(function(o){ return o.code === code; });
+          return { code: code, task: prev ? prev.task : '' };
+        });
+        await saveScheduleMutation(function(fresh){ fresh[key] = { store: store, shifts: pickedObjs }; });
+      }
+    }
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Lưu';
+    showToast('Đã lưu lịch làm việc.');
+    closeLqlDayModal();
+    renderLichQuanLy();
+  });
+  document.getElementById('lqlDayClear').addEventListener('click', async function(){
+    var emp = getCurrentUserEmployee();
+    if(!emp || !lqlSelectedDate) return;
+    var clearBtn = document.getElementById('lqlDayClear');
+    clearBtn.disabled = true;
+    clearBtn.textContent = 'Đang xóa...';
+    var key = scheduleKey(emp.maNV, lqlSelectedDate);
+    await saveScheduleMutation(function(fresh){ delete fresh[key]; });
+    clearBtn.disabled = false;
+    clearBtn.textContent = 'Xóa ngày này';
+    showToast('Đã xóa lịch ngày này.');
+    closeLqlDayModal();
+    renderLichQuanLy();
+  });
 
   /* ---------- Cập nhật thông tin nhân sự (Request/Duyệt) ---------- */
   var UR_FIELDS = ['hoKinhDoanh','chiNhanh','chucDanh','trangThai','mucLuong','sdt','diaChi','cmndCccd','stk','nganHang'];
@@ -3266,7 +3538,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   /* ---------- Phân quyền ---------- */
-  var PERM_TAB_LABELS = { employees:'Nhân viên', jobTitles:'Khai báo', salary:'Phân bổ lương', schedule:'Xếp lịch cửa hàng', tinhCong:'Tính công', capNhatTT:'Cập nhật thông tin NS' };
+  var PERM_TAB_LABELS = { employees:'Nhân viên', jobTitles:'Khai báo', salary:'Phân bổ lương', schedule:'Xếp lịch cửa hàng', tinhCong:'Tính công', capNhatTT:'Cập nhật thông tin NS', lichQuanLy:'Lịch Quản lý' };
   var permFormOverlay = document.getElementById('permFormOverlay');
   var permForm = document.getElementById('permForm');
   var pfEditingUsername = null;
@@ -3295,8 +3567,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       } else {
         storesHtml = '<span style="color:var(--ink-faint);">—</span>';
       }
+      var linkedEmp = p.maNV ? state.employees.find(function(e){ return e.maNV === p.maNV; }) : null;
+      var linkedHtml = linkedEmp ? '<div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">'+escapeHtml(p.maNV)+' — '+escapeHtml(linkedEmp.hoTen||'')+'</div>' : '';
       return '<tr>' +
-        '<td class="col-code">'+escapeHtml(u)+'</td>' +
+        '<td class="col-code">'+escapeHtml(u)+linkedHtml+'</td>' +
         '<td><div style="display:flex;flex-wrap:wrap;gap:6px;">'+tabsHtml+'</div></td>' +
         '<td><div style="display:flex;flex-wrap:wrap;gap:6px;">'+storesHtml+'</div></td>' +
         '<td><button type="button" class="btn btn-ghost btn-sm perm-edit-btn" data-username="'+escapeHtml(u)+'">Sửa</button></td>' +
@@ -3348,6 +3622,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.querySelectorAll('.pf-tab').forEach(function(cb){
       cb.checked = existing ? !!(existing.tabs && existing.tabs[cb.value]) : false;
     });
+    var sortedEmps = state.employees.slice().sort(function(a,b){ return (a.hoTen||'').localeCompare(b.hoTen||'', 'vi'); });
+    var maNVOptions = sortedEmps.map(function(e){ return e.maNV + ' — ' + (e.hoTen||''); });
+    populateSelect(document.getElementById('pf_maNV'), maNVOptions, existing && existing.maNV ? (existing.maNV + ' — ' + ((state.employees.find(function(e){return e.maNV===existing.maNV;})||{}).hoTen||'')) : '', '-- Không liên kết --');
     fillPermStoreCheckboxes(existing ? existing.stores : []);
     toggleStoresWrap();
     document.getElementById('permFormDelete').style.display = username ? '' : 'none';
@@ -3423,7 +3700,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var stores = [];
     document.querySelectorAll('.pf-store:checked').forEach(function(cb){ stores.push(cb.value); });
     var permOk = await mutateStateKeySafe('userPermissions', function(fresh){
-      fresh[finalUsername] = { tabs: tabs, stores: stores };
+      var maNVRaw = document.getElementById('pf_maNV').value;
+      var linkedMaNV = maNVRaw ? maNVRaw.split(' — ')[0] : '';
+      fresh[finalUsername] = { tabs: tabs, stores: stores, maNV: linkedMaNV };
     });
     if(!permOk) return;
     closePermForm();
@@ -3460,7 +3739,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       salary: document.getElementById('tabSalary'),
       schedule: document.getElementById('tabSchedule'),
       tinhCong: document.getElementById('tabTinhCong'),
-      capNhatTT: document.getElementById('tabCapNhatTT')
+      capNhatTT: document.getElementById('tabCapNhatTT'),
+      lichQuanLy: document.getElementById('tabLichQuanLy')
     };
     var firstAllowed = null;
     Object.keys(tabButtons).forEach(function(key){
