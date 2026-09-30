@@ -5549,10 +5549,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   });
   document.getElementById('scheduleCellSave').addEventListener('click', async function(){
     if(!state.scheduleCellMaNV) return;
+    var saveBtn = document.getElementById('scheduleCellSave');
+    var cancelBtn = document.getElementById('scheduleCellCancel');
     var key = scheduleKey(state.scheduleCellMaNV, state.scheduleCellDate);
     var storeForEntry = state.scheduleSelectedStore;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Đang lưu...';
+    if(cancelBtn) cancelBtn.disabled = true;
     if(state.scheduleCellOffActive){
       await saveScheduleMutation(function(fresh){ fresh[key] = { store: storeForEntry, off: true }; });
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Lưu';
+      if(cancelBtn) cancelBtn.disabled = false;
       showToast('Đã đánh dấu ngày nghỉ.');
       closeScheduleCellModal();
       return;
@@ -5561,6 +5569,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       .filter(function(v){ return v; });
     if(picked.length > 2){
       document.getElementById('scheduleCellError').style.display = 'block';
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Lưu';
+      if(cancelBtn) cancelBtn.disabled = false;
       return;
     }
     if(picked.length){
@@ -5573,13 +5584,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     } else {
       await saveScheduleMutation(function(fresh){ delete fresh[key]; });
     }
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Lưu';
+    if(cancelBtn) cancelBtn.disabled = false;
     showToast('Đã lưu lịch làm việc.');
     closeScheduleCellModal();
   });
   document.getElementById('scheduleCellRemove').addEventListener('click', async function(){
     if(!state.scheduleCellMaNV) return;
+    var removeBtn = document.getElementById('scheduleCellRemove');
     var key = scheduleKey(state.scheduleCellMaNV, state.scheduleCellDate);
+    removeBtn.disabled = true;
+    removeBtn.textContent = 'Đang xóa...';
     await saveScheduleMutation(function(fresh){ delete fresh[key]; });
+    removeBtn.disabled = false;
+    removeBtn.textContent = 'Xóa tất cả ca đã xếp';
     showToast('Đã xóa lịch ngày này.');
     closeScheduleCellModal();
   });
