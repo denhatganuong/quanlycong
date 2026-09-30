@@ -5129,8 +5129,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     'dien thoai':'dienThoai',
     'xang xe':'xangXe',
     'ho tro k nhiem':'hoTroKiemNhiem', 'ho tro kiem nhiem':'hoTroKiemNhiem',
-    'kpis khac':'kpiKhac', 'kpi khac':'kpiKhac'
+    'kpis khac':'kpiKhac', 'kpi khac':'kpiKhac',
+    'bao hiem':'baoHiem', 'trang thai dong bao hiem':'baoHiem'
   };
+  var BAO_HIEM_IMPORT_ALIASES = {
+    'chua tham gia':'Chưa Tham Gia', 'chua':'Chưa Tham Gia',
+    'da tham gia':'Đã Tham Gia', 'da':'Đã Tham Gia',
+    'cty ho tro':'Cty Hỗ Trợ', 'cong ty ho tro':'Cty Hỗ Trợ', 'ho tro':'Cty Hỗ Trợ'
+  };
+  function parseBaoHiemValue(v){
+    var norm = normalizeHeader(String(v||''));
+    return BAO_HIEM_IMPORT_ALIASES[norm] || null;
+  }
   function parseSalaryNumber(v){
     if(v === '' || v === null || v === undefined) return 0;
     if(typeof v === 'number') return Math.round(v);
@@ -5179,6 +5189,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         xangXe: parseSalaryNumber(rec.xangXe),
         hoTroKiemNhiem: parseSalaryNumber(rec.hoTroKiemNhiem),
         kpiKhac: parseSalaryNumber(rec.kpiKhac),
+        baoHiem: rec.baoHiem !== undefined ? parseBaoHiemValue(rec.baoHiem) : undefined,
         _row: idx + 2
       });
     });
@@ -5220,6 +5231,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           capNhatLuc: new Date().toISOString()
         };
         if(r.luongCB !== undefined) payload.luongCB = r.luongCB;
+        if(r.baoHiem) payload.baoHiem = r.baoHiem;
         fresh[key] = Object.assign({}, fresh[key] || {}, payload);
         updated++;
       });
