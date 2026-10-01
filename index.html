@@ -6470,14 +6470,25 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     var gioOT = (soGioThucHien - soGioCongChuan) > 0 ? (soGioThucHien - soGioCongChuan) : 0;
     gioOT = Math.round(gioOT * 100) / 100;
-    var tienOT = Math.round(gioOT * otRate);
 
+    var isParttime = (e.chucDanh||'').replace(/\s+/g,'').toLowerCase() === 'parttime';
     var mucLuong = Number(e.mucLuong) || 0;
-    var tienCong = soGioCongChuan > 0 ? (mucLuong / soGioCongChuan) * soGioThucHien : 0;
-    if(tienCong > mucLuong) tienCong = mucLuong;
-    tienCong = Math.round(tienCong);
+    var tienOT, tienCong, tongLuong;
 
-    var tongLuong = tienOT + tienCong;
+    if(isParttime){
+      // Nhân viên Parttime: lương = giờ công thực hiện x Lương CB (lấy từ Phân bổ lương, Lương CB ở đây là đơn giá/giờ)
+      var srRow = buildSalaryRow(e);
+      var luongCBPerHour = Number(srRow.luongCB) || 0;
+      tienOT = 0;
+      tienCong = Math.round(soGioThucHien * luongCBPerHour);
+      tongLuong = tienCong;
+    } else {
+      tienOT = Math.round(gioOT * otRate);
+      tienCong = soGioCongChuan > 0 ? (mucLuong / soGioCongChuan) * soGioThucHien : 0;
+      if(tienCong > mucLuong) tienCong = mucLuong;
+      tienCong = Math.round(tienCong);
+      tongLuong = tienOT + tienCong;
+    }
 
     return {
       soGioThucHien: soGioThucHien, soGioCongChuan: soGioCongChuan,
