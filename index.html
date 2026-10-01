@@ -3660,7 +3660,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '<td style="text-align:right;font-weight:650;">'+Number(r.soTienUng||0).toLocaleString('vi-VN')+'đ</td>' +
         '<td><span class="tag '+(ADV_STATUS_TAG[r.trangThai]||'tag-1')+'">'+escapeHtml(r.trangThai)+'</span></td>' +
         '<td><input type="text" class="adv-note-input" data-id="'+escapeHtml(r.id)+'" value="'+escapeHtml(r.ghiChu||'')+'" placeholder="Ghi chú..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12.5px;"></td>' +
-        '<td>'+actionsHtml+'</td>' +
+        '<td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'+actionsHtml+
+          '<button type="button" class="btn btn-ghost btn-sm adv-delete-btn" data-id="'+escapeHtml(r.id)+'" style="color:var(--danger);">🗑 Xóa</button>' +
+        '</td>' +
       '</tr>';
     }).join('');
   }
@@ -3669,6 +3671,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var confirmBtn = ev.target.closest('.adv-confirm-btn');
     var receiveBtn = ev.target.closest('.adv-receive-btn');
     var reopenBtn = ev.target.closest('.adv-reopen-btn');
+    var deleteBtn = ev.target.closest('.adv-delete-btn');
     if(confirmBtn){
       if(!confirm('Xác nhận yêu cầu ứng tiền này? Sau khi xác nhận sẽ không sửa được thông tin nữa.')) return;
       var id1 = confirmBtn.dataset.id;
@@ -3713,6 +3716,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         }
       });
       showToast('Đã mở lại yêu cầu này.');
+      renderAdvanceTable();
+      return;
+    }
+    if(deleteBtn){
+      var passD = window.prompt('Nhập mật khẩu để xóa dòng ứng tiền này:');
+      if(passD === null) return;
+      if(passD !== ADV_PASSWORD){ showToast('Sai mật khẩu.', true); return; }
+      if(!confirm('Xóa vĩnh viễn dòng ứng tiền này? Không thể hoàn tác.')) return;
+      var idD = deleteBtn.dataset.id;
+      await mutateStateKeySafe('advanceRequests', function(fresh){
+        var idx = fresh.findIndex(function(x){ return x.id === idD; });
+        if(idx !== -1) fresh.splice(idx, 1);
+      });
+      showToast('Đã xóa.');
       renderAdvanceTable();
       return;
     }
