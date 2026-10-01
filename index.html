@@ -1263,10 +1263,6 @@
       <button class="close-x" id="lqlDayClose" aria-label="Đóng">✕</button>
     </div>
     <div class="modal-body" style="overflow:visible;max-height:none;">
-      <div class="form-field full" style="margin-bottom:14px;">
-        <label for="lql_store">Cửa hàng làm việc <span class="req">*</span></label>
-        <select id="lql_store"></select>
-      </div>
       <div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
         <div class="form-field">
           <label><span class="cat-dot tag-cat1"></span> Ca 1</label>
@@ -1275,6 +1271,7 @@
             <div class="ca-picker-panel" id="lqlCa1Panel"></div>
             <select id="lqlCa1" class="visually-hidden"></select>
           </div>
+          <select id="lqlCa1Store" style="margin-top:6px;font-size:12px;" disabled></select>
         </div>
         <div class="form-field">
           <label><span class="cat-dot tag-cat2"></span> Ca 2 (tuỳ chọn)</label>
@@ -1283,6 +1280,7 @@
             <div class="ca-picker-panel" id="lqlCa2Panel"></div>
             <select id="lqlCa2" class="visually-hidden"></select>
           </div>
+          <select id="lqlCa2Store" style="margin-top:6px;font-size:12px;" disabled></select>
         </div>
         <div class="form-field">
           <label><span class="cat-dot tag-catsp"></span> Ca đặc biệt (tuỳ chọn)</label>
@@ -1291,10 +1289,11 @@
             <div class="ca-picker-panel" id="lqlCa3Panel"></div>
             <select id="lqlCa3" class="visually-hidden"></select>
           </div>
+          <select id="lqlCa3Store" style="margin-top:6px;font-size:12px;" disabled></select>
         </div>
       </div>
+      <p style="font-size:11px;color:var(--ink-faint);margin:6px 0 0;">Mỗi ca chọn đúng cửa hàng sẽ làm hôm đó — có thể khác nhau (vd: Ca 1 ở CH A, Ca 2 ở CH B).</p>
       <p id="lqlCaError" style="color:var(--danger);font-size:12.5px;margin:12px 0 0;display:none;">⚠ Chỉ được chọn tối đa 2 ca cùng lúc trong 1 ngày.</p>
-      <p style="font-size:11.5px;color:var(--ink-faint);margin:8px 0 0;">Chọn tối đa 2 trong 3 cột ở trên cho cùng một ngày.</p>
       <div style="border-top:1px solid var(--border);margin:16px 0 0;padding-top:14px;">
         <button type="button" class="off-toggle-btn" id="lql_offToggle">
           <span class="off-toggle-dot"></span> OFF — Đánh dấu ngày nghỉ (không làm việc)
@@ -1880,6 +1879,7 @@
         </div>
       </div>
       <p id="scheduleCellError" style="color:var(--danger);font-size:12.5px;margin:12px 0 0;display:none;">⚠ Chỉ được chọn tối đa 2 ca cùng lúc trong 1 ngày.</p>
+      <p id="scheduleCellOtherStoreNote" style="color:var(--gold-dark);background:var(--gold-soft);border-radius:8px;padding:8px 10px;font-size:12px;margin:10px 0 0;display:none;"></p>
       <p style="font-size:11.5px;color:var(--ink-faint);margin:8px 0 0;">Chọn tối đa 2 trong 3 cột ở trên cho cùng một ngày.</p>
       <div style="border-top:1px solid var(--border);margin:16px 0 0;padding-top:14px;">
         <button type="button" class="off-toggle-btn" id="scheduleCellOffToggle">
@@ -3247,9 +3247,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var pairs = {};
     inMonthDates.forEach(function(d){
       var entry = getScheduleEntry(maNV, d);
-      if(entry && entry.store && !entry.off){
-        pairs[entry.store + '|' + getWeekStartISO(d)] = true;
-      }
+      if(!entry || entry.off) return;
+      getScheduleShiftObjects(maNV, d).forEach(function(o){
+        if(o.store) pairs[o.store + '|' + getWeekStartISO(d)] = true;
+      });
     });
     return Object.keys(pairs);
   }
@@ -3318,19 +3319,22 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var dayNum = Number(d.slice(8,10));
         var entry = getScheduleEntry(emp.maNV, d);
         var isToday = (d === todayISO());
-        var rowLocked = entry && entry.store && !entry.off && state.scheduleLocks[entry.store + '|' + getWeekStartISO(d)];
+        var dayShifts = (entry && !entry.off) ? getScheduleShiftObjects(emp.maNV, d) : [];
+        var anyLocked = dayShifts.some(function(o){ return o.store && state.scheduleLocks[o.store + '|' + getWeekStartISO(d)]; });
         var cellStyle = 'vertical-align:top;padding:8px;height:76px;border:1px solid var(--border);' +
           (isToday ? 'background:var(--brand-soft);' : 'background:#fff;') +
-          (rowLocked ? 'cursor:not-allowed;' : 'cursor:pointer;');
+          (anyLocked ? 'cursor:not-allowed;' : 'cursor:pointer;');
         var inner = '<div style="font-size:12px;font-weight:700;color:'+(isToday?'var(--brand-dark)':'var(--ink-soft)')+';margin-bottom:5px;">'+dayNum+'</div>';
         if(entry && entry.off){
           inner += '<span style="display:inline-block;background:var(--slate);color:#fff;font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:5px;">OFF</span>';
-        } else if(entry && entry.store){
-          var shiftsArr = getScheduleShiftObjects(emp.maNV, d);
-          inner += '<div style="display:flex;flex-wrap:wrap;gap:3px;">' + shiftsArr.map(function(o){
-            return '<span style="font-size:10.5px;font-weight:650;background:var(--brand-soft);color:var(--brand-dark);border-radius:5px;padding:1px 6px;">'+escapeHtml(o.code)+'</span>';
+        } else if(dayShifts.length > 0){
+          inner += '<div style="display:flex;flex-direction:column;gap:3px;">' + dayShifts.map(function(o){
+            var locked = o.store && state.scheduleLocks[o.store + '|' + getWeekStartISO(d)];
+            return '<div>' +
+              '<span style="font-size:10.5px;font-weight:650;background:var(--brand-soft);color:var(--brand-dark);border-radius:5px;padding:1px 6px;">'+escapeHtml(o.code)+(locked?' 🔒':'')+'</span>' +
+              '<div style="font-size:9.5px;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(o.store||'—')+'</div>' +
+            '</div>';
           }).join('') + '</div>';
-          inner += '<div style="font-size:10px;color:var(--ink-faint);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(entry.store)+'</div>';
         } else {
           inner += '<span style="font-size:11px;color:var(--ink-faint);">+ Xếp lịch</span>';
         }
@@ -3442,14 +3446,25 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var d = cell.dataset.date;
     var emp = lqlActiveEmp;
     var entry = emp ? getScheduleEntry(emp.maNV, d) : null;
-    if(entry && entry.store && !entry.off && isWeekLocked(entry.store, getWeekStartISO(d))){
-      showToast('Tuần này đã chốt công, cần mở lại trước khi sửa.', true);
+    var anyCaLocked = emp && entry && !entry.off && getScheduleShiftObjects(emp.maNV, d).some(function(o){
+      return o.store && isWeekLocked(o.store, getWeekStartISO(d));
+    });
+    if(anyCaLocked){
+      showToast('Ngày này có ca đã chốt công, cần mở lại trước khi sửa.', true);
       return;
     }
     openLqlDayModal(d);
   });
 
   var lqlDayOverlay = document.getElementById('lqlDayOverlay');
+  function lqlSyncCaStoreState(prefix){
+    var caVal = document.getElementById(prefix).value;
+    var storeSel = document.getElementById(prefix + 'Store');
+    storeSel.disabled = !caVal;
+    if(caVal && !storeSel.value){
+      storeSel.value = lqlActiveEmp ? (lqlActiveEmp.chiNhanh || '') : '';
+    }
+  }
   function openLqlDayModal(dateISO){
     var emp = lqlActiveEmp;
     if(!emp) return;
@@ -3458,19 +3473,37 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('e_lqlDay').textContent = '';
 
     var entry = getScheduleEntry(emp.maNV, dateISO);
-    populateSelect(document.getElementById('lql_store'), getDeclaredChiNhanhNames(), (entry && entry.store) ? entry.store : (emp.chiNhanh||''), '-- Chọn cửa hàng --');
-
-    var currentCodes = getScheduleAssignment(emp.maNV, dateISO);
+    var shiftObjs = getScheduleShiftObjects(emp.maNV, dateISO);
+    var currentCodes = shiftObjs.map(function(o){ return o.code; });
     populateScheduleCatSelect('lqlCa1', 'Ca 1', currentCodes);
     populateScheduleCatSelect('lqlCa2', 'Ca 2', currentCodes);
     populateScheduleCatSelect('lqlCa3', 'Ca đặc biệt', currentCodes);
     document.getElementById('lqlCaError').style.display = 'none';
+
+    ['lqlCa1','lqlCa2','lqlCa3'].forEach(function(prefix){
+      var code = document.getElementById(prefix).value;
+      var shiftObj = shiftObjs.find(function(o){ return o.code === code; });
+      var storeSel = document.getElementById(prefix + 'Store');
+      populateSelect(storeSel, getDeclaredChiNhanhNames(), (shiftObj && shiftObj.store) ? shiftObj.store : (code ? (emp.chiNhanh||'') : ''), '-- Cửa hàng --');
+      storeSel.disabled = !code;
+    });
 
     lqlOffActive = !!(entry && entry.off);
     document.getElementById('lql_offToggle').classList.toggle('active', lqlOffActive);
     setSchedulePickersDisabled(lqlOffActive);
     lqlDayOverlay.classList.add('show');
   }
+  ['lqlCa1Panel','lqlCa2Panel','lqlCa3Panel'].forEach(function(panelId){
+    var prefix = panelId.replace('Panel','');
+    document.getElementById(panelId).addEventListener('click', function(ev){
+      var item = ev.target.closest('.ca-picker-item');
+      if(!item) return;
+      var storeSel = document.getElementById(prefix + 'Store');
+      var val = item.dataset.value;
+      storeSel.disabled = !val;
+      if(val && !storeSel.value) storeSel.value = lqlActiveEmp ? (lqlActiveEmp.chiNhanh || '') : '';
+    });
+  });
   function closeLqlDayModal(){ lqlDayOverlay.classList.remove('show'); lqlSelectedDate = null; }
   document.getElementById('lqlDayClose').addEventListener('click', closeLqlDayModal);
   document.getElementById('lqlDayCancel').addEventListener('click', closeLqlDayModal);
@@ -3479,40 +3512,57 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     lqlOffActive = !lqlOffActive;
     this.classList.toggle('active', lqlOffActive);
     setSchedulePickersDisabled(lqlOffActive);
+    ['lqlCa1Store','lqlCa2Store','lqlCa3Store'].forEach(function(id){
+      document.getElementById(id).disabled = lqlOffActive || !document.getElementById(id.replace('Store','')).value;
+    });
   });
 
   document.getElementById('lqlDaySave').addEventListener('click', async function(){
     var emp = lqlActiveEmp;
     if(!emp || !lqlSelectedDate) return;
-    var store = document.getElementById('lql_store').value;
-    if(!store){
-      document.getElementById('e_lqlDay').textContent = 'Vui lòng chọn cửa hàng làm việc.';
-      return;
-    }
     var LQL_CAT_SELECT_IDS = ['lqlCa1', 'lqlCa2', 'lqlCa3'];
-    var picked = LQL_CAT_SELECT_IDS.map(function(id){ return document.getElementById(id).value; })
+    var pickedCodes = LQL_CAT_SELECT_IDS.map(function(id){ return document.getElementById(id).value; })
       .filter(function(v){ return v; });
-    if(!lqlOffActive && picked.length > 2){
+    if(!lqlOffActive && pickedCodes.length > 2){
       document.getElementById('lqlCaError').style.display = 'block';
       return;
     }
     document.getElementById('lqlCaError').style.display = 'none';
+
+    var pickedObjs = [];
+    if(!lqlOffActive){
+      for(var i = 0; i < LQL_CAT_SELECT_IDS.length; i++){
+        var id = LQL_CAT_SELECT_IDS[i];
+        var code = document.getElementById(id).value;
+        if(!code) continue;
+        var storeSel = document.getElementById(id + 'Store');
+        var storeVal = storeSel.value;
+        if(!storeVal){
+          document.getElementById('e_lqlDay').textContent = 'Vui lòng chọn cửa hàng cho mỗi ca đã chọn.';
+          return;
+        }
+        pickedObjs.push({ code: code, store: storeVal });
+      }
+    }
+    document.getElementById('e_lqlDay').textContent = '';
+
     var saveBtn = document.getElementById('lqlDaySave');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Đang lưu...';
     var key = scheduleKey(emp.maNV, lqlSelectedDate);
+    var defaultStore = pickedObjs.length ? pickedObjs[0].store : (emp.chiNhanh || '');
     if(lqlOffActive){
-      await saveScheduleMutation(function(fresh){ fresh[key] = { store: store, off: true }; });
+      await saveScheduleMutation(function(fresh){ fresh[key] = { store: defaultStore, off: true }; });
     } else {
-      if(picked.length === 0){
+      var prevObjs = getScheduleShiftObjects(emp.maNV, lqlSelectedDate);
+      pickedObjs = pickedObjs.map(function(o){
+        var prev = prevObjs.find(function(p){ return p.code === o.code; });
+        return { code: o.code, store: o.store, task: prev ? prev.task : '' };
+      });
+      if(pickedObjs.length === 0){
         await saveScheduleMutation(function(fresh){ delete fresh[key]; });
       } else {
-        var prevObjs = getScheduleShiftObjects(emp.maNV, lqlSelectedDate);
-        var pickedObjs = picked.map(function(code){
-          var prev = prevObjs.find(function(o){ return o.code === code; });
-          return { code: code, task: prev ? prev.task : '' };
-        });
-        await saveScheduleMutation(function(fresh){ fresh[key] = { store: store, shifts: pickedObjs }; });
+        await saveScheduleMutation(function(fresh){ fresh[key] = { shifts: pickedObjs }; });
       }
     }
     saveBtn.disabled = false;
@@ -5775,7 +5825,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function getScheduleShiftObjects(maNV, date){
     var e = getScheduleEntry(maNV, date);
     if(!e || !Array.isArray(e.shifts)) return [];
-    return e.shifts.map(function(s){ return typeof s === 'string' ? {code:s, task:''} : s; });
+    return e.shifts.map(function(s){
+      var obj = typeof s === 'string' ? {code:s, task:''} : s;
+      // Dữ liệu cũ chỉ có store ở cấp cả ngày (e.store) — nếu ca chưa có store riêng thì lấy tạm store ngày đó.
+      if(!obj.store) obj = Object.assign({}, obj, { store: e.store || null });
+      return obj;
+    });
+  }
+  // Danh sách TÊN cửa hàng khác nhau mà nhân viên này thực sự làm trong ngày (có thể >1 nếu sáng/chiều khác cửa hàng).
+  function getScheduleStoresOfDay(maNV, date){
+    var e = getScheduleEntry(maNV, date);
+    if(!e) return [];
+    if(e.off) return e.store ? [e.store] : [];
+    var set = {};
+    getScheduleShiftObjects(maNV, date).forEach(function(o){ if(o.store) set[o.store] = true; });
+    return Object.keys(set);
   }
   function isOffDay(maNV, date){
     var e = getScheduleEntry(maNV, date);
@@ -5898,30 +5962,38 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '</td>';
       weekDates.forEach(function(d){
         var entry = getScheduleEntry(e.maNV, d);
-        if(entry && entry.store && entry.store !== viewStore){
-          rowHtml += '<td class="sched-cell">' +
-            '<div class="sched-elsewhere" title="Đã được '+escapeHtml(entry.store)+' xếp lịch ngày này">ĐANG LÀM<br>Ở CH KHÁC</div>' +
-          '</td>';
-          return;
-        }
         if(entry && entry.off){
           rowHtml += '<td class="sched-cell">' +
             '<button type="button" class="sched-off" data-manv="'+escapeHtml(e.maNV)+'" data-date="'+d+'" aria-label="Ngày nghỉ">OFF</button>' +
           '</td>';
           return;
         }
-        var codes = getScheduleAssignment(e.maNV, d);
-        if(codes.length > 0){
-          var badgesHtml = codes.map(function(maCa){
-            var shift = getShiftByCode(maCa);
+        var allShifts = getScheduleShiftObjects(e.maNV, d);
+        var thisStoreShifts = allShifts.filter(function(o){ return o.store === viewStore; });
+        var otherStores = {};
+        allShifts.forEach(function(o){ if(o.store && o.store !== viewStore) otherStores[o.store] = true; });
+        var otherStoreNames = Object.keys(otherStores);
+
+        if(thisStoreShifts.length === 0 && otherStoreNames.length > 0){
+          rowHtml += '<td class="sched-cell">' +
+            '<div class="sched-elsewhere" title="Đã được '+escapeHtml(otherStoreNames.join(', '))+' xếp lịch ngày này">ĐANG LÀM<br>Ở CH KHÁC</div>' +
+          '</td>';
+          return;
+        }
+        if(thisStoreShifts.length > 0){
+          var badgesHtml = thisStoreShifts.map(function(o){
+            var shift = getShiftByCode(o.code);
             var cls = shift ? scheduleCatClass(shift.loaiCa) : 'tag-6';
             return '<div class="sched-assigned '+cls+'" title="'+(shift ? escapeHtml(shift.tenCa) : '')+'">' +
-                escapeHtml(maCa) +
+                escapeHtml(o.code) +
                 (shift ? '<span class="t">'+escapeHtml(shift.batDau)+'-'+escapeHtml(shift.ketThuc)+'</span>' : '') +
               '</div>';
           }).join('');
+          var otherNote = otherStoreNames.length
+            ? '<div style="font-size:9.5px;color:var(--gold-dark);background:var(--gold-soft);border-radius:4px;padding:1px 4px;margin-top:2px;" title="Hôm nay còn làm ở '+escapeHtml(otherStoreNames.join(', '))+'">+ '+escapeHtml(otherStoreNames.join(', '))+'</div>'
+            : '';
           rowHtml += '<td class="sched-cell">' +
-            '<div class="sched-cell-stack" data-manv="'+escapeHtml(e.maNV)+'" data-date="'+d+'">' + badgesHtml + '</div>' +
+            '<div class="sched-cell-stack" data-manv="'+escapeHtml(e.maNV)+'" data-date="'+d+'">' + badgesHtml + otherNote + '</div>' +
           '</td>';
         } else {
           rowHtml += '<td class="sched-cell">' +
@@ -6038,9 +6110,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function buildTimelineRowsForDate(date, allEmployees){
     var rows = [];
     allEmployees.forEach(function(e){
-      var entry = getScheduleEntry(e.maNV, date);
-      if(!entry || entry.store !== state.scheduleSelectedStore) return;
-      var objs = getScheduleShiftObjects(e.maNV, date);
+      var objs = getScheduleShiftObjects(e.maNV, date).filter(function(o){ return o.store === state.scheduleSelectedStore; });
       if(objs.length === 0) return;
       rows.push({ emp: e, objs: objs });
     });
@@ -6278,8 +6348,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('scheduleCellTitle').textContent = (emp ? emp.hoTen : maNV) + ' – ' + dowLabel;
     document.getElementById('scheduleCellSubtitle').textContent = formatDDMM(date) + (emp ? ' · ' + emp.maNV : '');
 
-    var current = getScheduleAssignment(maNV, date);
-    var offActive = isOffDay(maNV, date);
+    var current = getScheduleShiftObjects(maNV, date)
+      .filter(function(o){ return o.store === state.scheduleSelectedStore; })
+      .map(function(o){ return o.code; });
+    var entryNow = getScheduleEntry(maNV, date);
+    var offActive = !!(entryNow && entryNow.off);
+    var otherStoreNames = getScheduleStoresOfDay(maNV, date).filter(function(s){ return s !== state.scheduleSelectedStore; });
     state.scheduleCellOffActive = offActive;
     populateScheduleCatSelect('scheduleCellCa1', 'Ca 1', current);
     populateScheduleCatSelect('scheduleCellCa2', 'Ca 2', current);
@@ -6288,6 +6362,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('scheduleCellOffToggle').classList.toggle('active', offActive);
     setSchedulePickersDisabled(offActive);
     document.getElementById('scheduleCellRemove').style.display = (current.length || offActive) ? '' : 'none';
+    var noteEl = document.getElementById('scheduleCellOtherStoreNote');
+    if(noteEl){
+      if(otherStoreNames.length){
+        noteEl.style.display = '';
+        noteEl.textContent = 'Lưu ý: hôm nay nhân viên này còn làm ở ' + otherStoreNames.join(', ') + ' — phần đó vẫn giữ nguyên, không bị ảnh hưởng.';
+      } else {
+        noteEl.style.display = 'none';
+      }
+    }
     scheduleCellOverlay.classList.add('show');
   }
   function closeScheduleCellModal(){
@@ -6305,6 +6388,36 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     setSchedulePickersDisabled(state.scheduleCellOffActive);
     document.getElementById('scheduleCellError').style.display = 'none';
   });
+  // Cập nhật đúng phần CỦA 1 CỬA HÀNG trong ngày — giữ nguyên ca của (các) cửa hàng khác nếu nhân viên
+  // làm nhiều nơi trong cùng 1 ngày (vd sáng CH A, chiều CH B). newShiftObjs=null nghĩa là đánh dấu nghỉ.
+  function applyStoreShiftsForDay(fresh, key, storeForEntry, newShiftObjs){
+    var existing = fresh[key];
+    var otherStoreShifts = [];
+    if(existing && !existing.off && Array.isArray(existing.shifts)){
+      existing.shifts.forEach(function(s){
+        var obj = typeof s === 'string' ? { code: s, task: '' } : s;
+        var st = obj.store || existing.store || null;
+        if(st && st !== storeForEntry){
+          otherStoreShifts.push(Object.assign({}, obj, { store: st }));
+        }
+      });
+    }
+    if(newShiftObjs === null){
+      if(otherStoreShifts.length > 0){
+        fresh[key] = { shifts: otherStoreShifts };
+      } else {
+        fresh[key] = { store: storeForEntry, off: true };
+      }
+      return;
+    }
+    var thisStoreShifts = (newShiftObjs || []).map(function(o){ return Object.assign({}, o, { store: storeForEntry }); });
+    var combined = otherStoreShifts.concat(thisStoreShifts);
+    if(combined.length === 0){
+      delete fresh[key];
+    } else {
+      fresh[key] = { shifts: combined };
+    }
+  }
   document.getElementById('scheduleCellSave').addEventListener('click', async function(){
     if(!state.scheduleCellMaNV) return;
     var saveBtn = document.getElementById('scheduleCellSave');
@@ -6315,11 +6428,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     saveBtn.textContent = 'Đang lưu...';
     if(cancelBtn) cancelBtn.disabled = true;
     if(state.scheduleCellOffActive){
-      await saveScheduleMutation(function(fresh){ fresh[key] = { store: storeForEntry, off: true }; });
+      await saveScheduleMutation(function(fresh){ applyStoreShiftsForDay(fresh, key, storeForEntry, null); });
       saveBtn.disabled = false;
       saveBtn.textContent = 'Lưu';
       if(cancelBtn) cancelBtn.disabled = false;
-      showToast('Đã đánh dấu ngày nghỉ.');
+      showToast('Đã đánh dấu nghỉ ở cửa hàng này.');
       closeScheduleCellModal();
       return;
     }
@@ -6332,16 +6445,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(cancelBtn) cancelBtn.disabled = false;
       return;
     }
-    if(picked.length){
-      var prevObjs = getScheduleShiftObjects(state.scheduleCellMaNV, state.scheduleCellDate);
-      var pickedObjs = picked.map(function(code){
-        var prev = prevObjs.find(function(o){ return o.code === code; });
-        return { code: code, task: prev ? prev.task : '' };
-      });
-      await saveScheduleMutation(function(fresh){ fresh[key] = { store: storeForEntry, shifts: pickedObjs }; });
-    } else {
-      await saveScheduleMutation(function(fresh){ delete fresh[key]; });
-    }
+    var prevObjs = getScheduleShiftObjects(state.scheduleCellMaNV, state.scheduleCellDate)
+      .filter(function(o){ return o.store === storeForEntry; });
+    var pickedObjs = picked.map(function(code){
+      var prev = prevObjs.find(function(o){ return o.code === code; });
+      return { code: code, task: prev ? prev.task : '' };
+    });
+    await saveScheduleMutation(function(fresh){ applyStoreShiftsForDay(fresh, key, storeForEntry, pickedObjs); });
     saveBtn.disabled = false;
     saveBtn.textContent = 'Lưu';
     if(cancelBtn) cancelBtn.disabled = false;
@@ -6352,12 +6462,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(!state.scheduleCellMaNV) return;
     var removeBtn = document.getElementById('scheduleCellRemove');
     var key = scheduleKey(state.scheduleCellMaNV, state.scheduleCellDate);
+    var storeForEntry = state.scheduleSelectedStore;
     removeBtn.disabled = true;
     removeBtn.textContent = 'Đang xóa...';
-    await saveScheduleMutation(function(fresh){ delete fresh[key]; });
+    await saveScheduleMutation(function(fresh){
+      var existing = fresh[key];
+      if(existing && !existing.off && Array.isArray(existing.shifts)){
+        applyStoreShiftsForDay(fresh, key, storeForEntry, []);
+      } else {
+        delete fresh[key];
+      }
+    });
     removeBtn.disabled = false;
     removeBtn.textContent = 'Xóa tất cả ca đã xếp';
-    showToast('Đã xóa lịch ngày này.');
+    showToast('Đã xóa lịch ngày này ở cửa hàng này.');
     closeScheduleCellModal();
   });
 
@@ -6454,39 +6572,49 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     state.employees.forEach(function(e){
       weekDates.forEach(function(date, idx){
         var entry = getScheduleEntry(e.maNV, date);
-        if(!entry || !entry.store) return;
+        if(!entry) return;
         var dow = WEEKDAY_LABELS[idx];
         if(entry.off){
           records.push({
-            store: entry.store, maNV: e.maNV, hoTen: e.hoTen, chucDanh: e.chucDanh||'',
+            store: entry.store || '', maNV: e.maNV, hoTen: e.hoTen, chucDanh: e.chucDanh||'',
             date: date, dow: dow, loai: 'Nghỉ (OFF)', maCa: '', tenCa: '', batDau: '', ketThuc: '', gio: '', congViec: ''
           });
           return;
         }
         var objs = getScheduleShiftObjects(e.maNV, date);
         if(objs.length === 0) return;
-        var resolved = objs.map(function(o){
-          var shift = getShiftByCode(o.code);
-          return {
-            code: o.code,
-            task: o.task || '',
-            tenCa: shift ? shift.tenCa : '',
-            batDau: shift ? shift.batDau : '',
-            ketThuc: shift ? shift.ketThuc : '',
-            gio: shift ? (Number(shift.gio) || 0) : 0,
-            startMin: shift ? (timeToMinutes(shift.batDau) || 0) : 0
-          };
-        }).sort(function(a,b){ return a.startMin - b.startMin; });
 
-        records.push({
-          store: entry.store, maNV: e.maNV, hoTen: e.hoTen, chucDanh: e.chucDanh||'',
-          date: date, dow: dow, loai: 'Ca làm việc',
-          maCa: resolved.map(function(r){ return r.code; }).join(' + '),
-          tenCa: resolved.map(function(r){ return r.tenCa; }).filter(Boolean).join(' + '),
-          batDau: resolved[0].batDau,
-          ketThuc: resolved[resolved.length - 1].ketThuc,
-          gio: resolved.reduce(function(sum,r){ return sum + r.gio; }, 0),
-          congViec: resolved.map(function(r){ return r.task; }).filter(Boolean).join(' + ')
+        // 1 ngày có thể có nhiều ca ở nhiều cửa hàng khác nhau -> tách riêng theo từng cửa hàng
+        var byStore = {};
+        objs.forEach(function(o){
+          var st = o.store || '(Chưa gán cửa hàng)';
+          if(!byStore[st]) byStore[st] = [];
+          byStore[st].push(o);
+        });
+        Object.keys(byStore).forEach(function(storeName){
+          var resolved = byStore[storeName].map(function(o){
+            var shift = getShiftByCode(o.code);
+            return {
+              code: o.code,
+              task: o.task || '',
+              tenCa: shift ? shift.tenCa : '',
+              batDau: shift ? shift.batDau : '',
+              ketThuc: shift ? shift.ketThuc : '',
+              gio: shift ? (Number(shift.gio) || 0) : 0,
+              startMin: shift ? (timeToMinutes(shift.batDau) || 0) : 0
+            };
+          }).sort(function(a,b){ return a.startMin - b.startMin; });
+
+          records.push({
+            store: storeName, maNV: e.maNV, hoTen: e.hoTen, chucDanh: e.chucDanh||'',
+            date: date, dow: dow, loai: 'Ca làm việc',
+            maCa: resolved.map(function(r){ return r.code; }).join(' + '),
+            tenCa: resolved.map(function(r){ return r.tenCa; }).filter(Boolean).join(' + '),
+            batDau: resolved[0].batDau,
+            ketThuc: resolved[resolved.length - 1].ketThuc,
+            gio: resolved.reduce(function(sum,r){ return sum + r.gio; }, 0),
+            congViec: resolved.map(function(r){ return r.task; }).filter(Boolean).join(' + ')
+          });
         });
       });
     });
@@ -6563,9 +6691,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     await saveScheduleMutation(function(fresh){
       validStaff.forEach(function(e){
         var fromEntry = fresh[scheduleKey(e.maNV, sourceDate)];
-        if(!fromEntry || fromEntry.store !== storeForCopy) return;
+        if(!fromEntry) return;
+        if(fromEntry.off){
+          if(fromEntry.store !== storeForCopy) return;
+          targets.forEach(function(toDate){
+            applyStoreShiftsForDay(fresh, scheduleKey(e.maNV, toDate), storeForCopy, null);
+          });
+          return;
+        }
+        var shiftsHere = (fromEntry.shifts||[]).map(function(s){
+          var obj = typeof s === 'string' ? {code:s, task:''} : s;
+          return { code: obj.code, task: obj.task||'', store: obj.store || fromEntry.store || null };
+        }).filter(function(o){ return o.store === storeForCopy; }).map(function(o){ return {code:o.code, task:o.task}; });
+        if(shiftsHere.length === 0) return;
         targets.forEach(function(toDate){
-          fresh[scheduleKey(e.maNV, toDate)] = JSON.parse(JSON.stringify(fromEntry));
+          applyStoreShiftsForDay(fresh, scheduleKey(e.maNV, toDate), storeForCopy, shiftsHere);
         });
       });
     });
@@ -6591,8 +6731,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           var fromDate = addDaysISO(prevWeekStart, i);
           var toDate = addDaysISO(weekStart, i);
           var fromEntry = fresh[scheduleKey(e.maNV, fromDate)];
-          if(!fromEntry || fromEntry.store !== storeForCopy) continue;
-          fresh[scheduleKey(e.maNV, toDate)] = JSON.parse(JSON.stringify(fromEntry));
+          if(!fromEntry) continue;
+          if(fromEntry.off){
+            if(fromEntry.store !== storeForCopy) continue;
+            applyStoreShiftsForDay(fresh, scheduleKey(e.maNV, toDate), storeForCopy, null);
+            copyCount++;
+            continue;
+          }
+          var shiftsHere = (fromEntry.shifts||[]).map(function(s){
+            var obj = typeof s === 'string' ? {code:s, task:''} : s;
+            return { code: obj.code, task: obj.task||'', store: obj.store || fromEntry.store || null };
+          }).filter(function(o){ return o.store === storeForCopy; }).map(function(o){ return {code:o.code, task:o.task}; });
+          if(shiftsHere.length === 0) continue;
+          applyStoreShiftsForDay(fresh, scheduleKey(e.maNV, toDate), storeForCopy, shiftsHere);
           copyCount++;
         }
       });
@@ -6669,9 +6820,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function computeDayInfo(maNV, dateISO, storeFilter){
     var entry = getScheduleEntry(maNV, dateISO);
     if(!entry) return null;
-    if(storeFilter && entry.store !== storeFilter) return null;
     if(entry.off) return { type:'off', label:'OFF', hours:0 };
     var objs = getScheduleShiftObjects(maNV, dateISO);
+    if(storeFilter) objs = objs.filter(function(o){ return o.store === storeFilter; });
     if(objs.length === 0) return null;
     var totalGio = 0, hasSpecial = false;
     objs.forEach(function(o){
@@ -6711,10 +6862,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         for(var d = 1; d <= numDays; d++){
           var dateISO = tcDateISO(year, month, d);
           var entry = getScheduleEntry(e.maNV, dateISO);
-          if(!entry || !entry.store || entry.off) continue;
+          if(!entry || entry.off) continue;
           var weekStart = getWeekStartISO(dateISO);
-          if(!isWeekLocked(entry.store, weekStart)) continue;
-          storesWorked[entry.store] = true;
+          getScheduleShiftObjects(e.maNV, dateISO).forEach(function(o){
+            if(!o.store) return;
+            if(!isWeekLocked(o.store, weekStart)) return;
+            storesWorked[o.store] = true;
+          });
         }
       }
       var storeKeys = Object.keys(storesWorked);
@@ -6755,12 +6909,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     for(var d = 1; d <= numDays; d++){
       var dateISO = tcDateISO(year, month, d);
       var entry = getScheduleEntry(e.maNV, dateISO);
-      if(!entry || !entry.store || entry.off) continue;
-      if(storeFilter && entry.store !== storeFilter) continue;
+      if(!entry || entry.off) continue;
       var weekStart = getWeekStartISO(dateISO);
-      if(!isWeekLocked(entry.store, weekStart)) continue;
       var heSoNgay = Number(hmap[d]) || 1;
       getScheduleShiftObjects(e.maNV, dateISO).forEach(function(o){
+        if(!o.store) return;
+        if(storeFilter && o.store !== storeFilter) return;
+        if(!isWeekLocked(o.store, weekStart)) return;
         var shift = getShiftByCode(o.code);
         if(shift) soGioThucHien += (Number(shift.gio) || 0) * heSoNgay;
       });
