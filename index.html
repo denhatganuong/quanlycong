@@ -1311,9 +1311,17 @@
 </div>
 
 <div id="viewUngTien" style="display:none;">
-  <div class="view-actions" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-    <button type="button" class="btn btn-primary btn-sm" id="btnAddAdvance">+ Tạo yêu cầu ứng tiền</button>
-    <button type="button" class="btn btn-ghost btn-sm" id="btnExportAdvance">📥 Xuất Excel</button>
+  <div class="view-actions" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button type="button" class="btn btn-ghost btn-sm" id="advPrevMonth">‹ Tháng trước</button>
+      <span id="advMonthLabel" style="font-weight:650;font-size:14px;min-width:110px;text-align:center;"></span>
+      <button type="button" class="btn btn-ghost btn-sm" id="advNextMonth">Tháng sau ›</button>
+      <span style="margin-left:10px;font-size:12.5px;color:var(--ink-soft);">Tổng tiền ứng tháng: <b id="advMonthTotal" style="color:var(--brand-dark);">0đ</b></span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="btn btn-primary btn-sm" id="btnAddAdvance">+ Tạo yêu cầu ứng tiền</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnExportAdvance">📥 Xuất Excel</button>
+    </div>
   </div>
   <div class="table-scroll" style="margin-top:12px;">
     <table class="emp-table perm-table" id="advTable">
@@ -3541,6 +3549,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     advFormOverlay.classList.add('show');
   }
   function closeAdvanceForm(){ advFormOverlay.classList.remove('show'); }
+  document.getElementById('advPrevMonth').addEventListener('click', function(){
+    var m = state.advMonth - 1, y = state.advYear;
+    if(m < 1){ m = 12; y -= 1; }
+    state.advMonth = m; state.advYear = y;
+    renderAdvanceTable();
+  });
+  document.getElementById('advNextMonth').addEventListener('click', function(){
+    var m = state.advMonth + 1, y = state.advYear;
+    if(m > 12){ m = 1; y += 1; }
+    state.advMonth = m; state.advYear = y;
+    renderAdvanceTable();
+  });
+
   document.getElementById('btnAddAdvance').addEventListener('click', openAdvanceForm);
   document.getElementById('advFormClose').addEventListener('click', closeAdvanceForm);
   document.getElementById('advFormCancel').addEventListener('click', closeAdvanceForm);
@@ -3593,10 +3614,26 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   });
 
   var ADV_STATUS_TAG = { 'Chờ xác nhận':'tag-2', 'Đã xác nhận':'tag-1', 'Đã nhận tiền ứng':'tag-0' };
+
+  function getAdvFilteredList(){
+    if(!state.advYear || !state.advMonth){
+      var now = new Date();
+      state.advYear = now.getFullYear();
+      state.advMonth = now.getMonth() + 1;
+    }
+    var ymPrefix = state.advYear + '-' + pad2(state.advMonth);
+    return (state.advanceRequests || []).filter(function(r){
+      return r.ngayUng && r.ngayUng.slice(0,7) === ymPrefix;
+    }).sort(function(a,b){ return (b.ngayUng||'').localeCompare(a.ngayUng||''); });
+  }
+
   function renderAdvanceTable(){
+    document.getElementById('advMonthLabel').textContent = 'Tháng ' + state.advMonth + '/' + state.advYear;
     var tbody = document.getElementById('advTbody');
     var empty = document.getElementById('advEmptyState');
-    var list = (state.advanceRequests || []).slice().sort(function(a,b){ return (b.ngayUng||'').localeCompare(a.ngayUng||''); });
+    var list = getAdvFilteredList();
+    var monthTotal = list.reduce(function(sum, r){ return sum + (Number(r.soTienUng) || 0); }, 0);
+    document.getElementById('advMonthTotal').textContent = monthTotal.toLocaleString('vi-VN') + 'đ';
     if(list.length === 0){
       tbody.innerHTML = '';
       empty.style.display = 'flex';
@@ -3693,8 +3730,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   });
 
   document.getElementById('btnExportAdvance').addEventListener('click', function(){
-    var list = state.advanceRequests || [];
-    if(list.length === 0){ showToast('Chưa có yêu cầu nào để xuất.', true); return; }
+    var list = getAdvFilteredList();
+    if(list.length === 0){ showToast('Chưa có yêu cầu nào trong tháng này để xuất.', true); return; }
     var data = [['Mã NV','Tên NV','Tiền Ứng','Cửa hàng']];
     list.forEach(function(r){ data.push([r.maNV, r.hoTen, r.soTienUng, r.cuaHang]); });
     var ws = XLSX.utils.aoa_to_sheet(data);
@@ -3702,7 +3739,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'UngTien');
     var wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
-    downloadBlob(wbout, 'danh-sach-ung-tien.xlsx', 'application/octet-stream');
+    downloadBlob(wbout, 'danh-sach-ung-tien-thang-' + state.advMonth + '-' + state.advYear + '.xlsx', 'application/octet-stream');
     showToast('Đã xuất file Excel.');
   });
 
