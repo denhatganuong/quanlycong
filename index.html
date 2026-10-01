@@ -260,8 +260,9 @@
     width:100%;min-height:42px;border-radius:8px;
     display:flex;align-items:center;justify-content:center;text-align:center;
     font-size:9.5px;font-weight:700;letter-spacing:.02em;line-height:1.3;
-    background:var(--rose-soft);color:var(--rose-dark);cursor:default;
+    background:var(--rose-soft);color:var(--rose-dark);cursor:pointer;
   }
+  .sched-elsewhere:hover{background:var(--rose);color:#fff;}
 
   .off-toggle-btn{
     display:inline-flex;align-items:center;gap:8px;
@@ -5976,7 +5977,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
         if(thisStoreShifts.length === 0 && otherStoreNames.length > 0){
           rowHtml += '<td class="sched-cell">' +
-            '<div class="sched-elsewhere" title="Đã được '+escapeHtml(otherStoreNames.join(', '))+' xếp lịch ngày này">ĐANG LÀM<br>Ở CH KHÁC</div>' +
+            '<div class="sched-elsewhere" data-manv="'+escapeHtml(e.maNV)+'" data-date="'+d+'" title="Đã được '+escapeHtml(otherStoreNames.join(', '))+' xếp lịch ngày này — bấm để thêm ca ở cửa hàng này">ĐANG LÀM<br>Ở CH KHÁC<br><span style="font-weight:400;font-size:8.5px;">(bấm để thêm ca)</span></div>' +
           '</td>';
           return;
         }
@@ -6063,7 +6064,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   document.getElementById('scheduleStaffTbody').addEventListener('click', function(ev){
-    var btn = ev.target.closest('.sched-add-btn, .sched-cell-stack, .sched-off');
+    var btn = ev.target.closest('.sched-add-btn, .sched-cell-stack, .sched-off, .sched-elsewhere');
     if(!btn) return;
     if(isWeekLocked(state.scheduleSelectedStore, state.scheduleWeekStart)){
       showToast('Tuần này đã chốt công, không thể chỉnh sửa.', true);
