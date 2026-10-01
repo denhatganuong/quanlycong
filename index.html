@@ -697,6 +697,7 @@
     <button class="view-tab" id="tabTinhCong" data-view="tinhCong">Tính công</button>
     <button class="view-tab" id="tabCapNhatTT" data-view="capNhatTT">Cập nhật thông tin NS</button>
     <button class="view-tab" id="tabLichQuanLy" data-view="lichQuanLy">Lịch Quản lý</button>
+    <button class="view-tab" id="tabUngTien" data-view="ungTien">Ứng tiền</button>
     <button class="view-tab" id="tabPhanQuyen" data-view="phanQuyen" style="display:none;">Phân quyền</button>
   </div>
 
@@ -1306,6 +1307,68 @@
       <button type="button" class="btn btn-ghost" id="lqlDayCancel">Hủy</button>
       <button type="button" class="btn btn-primary" id="lqlDaySave">Lưu</button>
     </div>
+  </div>
+</div>
+
+<div id="viewUngTien" style="display:none;">
+  <div class="view-actions" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <button type="button" class="btn btn-primary btn-sm" id="btnAddAdvance">+ Tạo yêu cầu ứng tiền</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="btnExportAdvance">📥 Xuất Excel</button>
+  </div>
+  <div class="table-scroll" style="margin-top:12px;">
+    <table class="emp-table perm-table" id="advTable">
+      <thead>
+        <tr>
+          <th style="width:110px;">Ngày ứng</th>
+          <th style="width:100px;">Mã NV</th>
+          <th style="width:160px;">Tên nhân viên</th>
+          <th style="width:160px;">Cửa hàng</th>
+          <th style="width:130px;text-align:right;">Số tiền ứng</th>
+          <th style="width:130px;">Trạng thái</th>
+          <th style="width:200px;">Ghi chú</th>
+          <th style="width:220px;"></th>
+        </tr>
+      </thead>
+      <tbody id="advTbody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="advEmptyState" style="display:none;">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+    <h3>Chưa có yêu cầu ứng tiền nào</h3>
+    <p>Bấm "Tạo yêu cầu ứng tiền" để đăng ký cho 1 nhân viên.</p>
+  </div>
+</div>
+
+<!-- Ứng tiền: tạo yêu cầu -->
+<div class="overlay" id="advFormOverlay">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="advFormTitle">
+    <div class="modal-head">
+      <h2 id="advFormTitle">Tạo yêu cầu ứng tiền</h2>
+      <button class="close-x" id="advFormClose" aria-label="Đóng">✕</button>
+    </div>
+    <form id="advForm">
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-field full">
+            <label for="adv_store">Cửa hàng <span class="req">*</span></label>
+            <select id="adv_store"></select>
+          </div>
+          <div class="form-field full">
+            <label for="adv_emp">Nhân viên <span class="req">*</span></label>
+            <select id="adv_emp"><option value="">-- Chọn cửa hàng trước --</option></select>
+            <div class="err" id="e_adv_emp"></div>
+          </div>
+          <div class="form-field full">
+            <label for="adv_amount">Số tiền ứng (VNĐ) <span class="req">*</span></label>
+            <input type="number" id="adv_amount" min="0" step="100000" value="1000000">
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" id="advFormCancel">Hủy</button>
+        <button type="submit" class="btn btn-primary" id="advFormSubmit">Tạo yêu cầu</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -2062,11 +2125,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var SALARY_FIELDS = ["luongCB","chuyenCan","dienThoai","xangXe","hoTroKiemNhiem","kpiKhac"];
 
   /* ---------- Persistence (đổi sang Supabase — dữ liệu dùng chung qua internet) ---------- */
-  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','holidayMultipliers','userPermissions','updateRequests'];
+  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','holidayMultipliers','userPermissions','updateRequests','advanceRequests'];
   var APP_STATE_DEFAULTS = {
     employees: [], jobTitles: [], shifts: [], salaryAllocations: {}, stores: [],
     schedule: {}, borrowedStaff: {}, employeeScheduleStatus: {}, tasks: [],
-    scheduleLocks: {}, holidayMultipliers: {}, userPermissions: {}, updateRequests: []
+    scheduleLocks: {}, holidayMultipliers: {}, userPermissions: {}, updateRequests: [], advanceRequests: []
   };
   var lastKnownUpdatedAt = {};
 
@@ -3098,6 +3161,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(view === 'tinhCong'){ renderTinhCong(); }
     if(view === 'capNhatTT'){ renderUpdateRequestTable(); }
     if(view === 'lichQuanLy'){ renderLichQuanLy(); }
+    if(view === 'ungTien'){ renderAdvanceTable(); }
     if(view === 'phanQuyen'){ renderPermissionTable(); }
   }
   function switchView(view){
@@ -3109,6 +3173,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('viewTinhCong').style.display = view === 'tinhCong' ? '' : 'none';
     document.getElementById('viewCapNhatTT').style.display = view === 'capNhatTT' ? '' : 'none';
     document.getElementById('viewLichQuanLy').style.display = view === 'lichQuanLy' ? '' : 'none';
+    document.getElementById('viewUngTien').style.display = view === 'ungTien' ? '' : 'none';
     document.getElementById('viewPhanQuyen').style.display = view === 'phanQuyen' ? '' : 'none';
     document.getElementById('tabEmployees').classList.toggle('active', view === 'employees');
     document.getElementById('tabJobTitles').classList.toggle('active', view === 'jobTitles');
@@ -3117,6 +3182,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('tabTinhCong').classList.toggle('active', view === 'tinhCong');
     document.getElementById('tabCapNhatTT').classList.toggle('active', view === 'capNhatTT');
     document.getElementById('tabLichQuanLy').classList.toggle('active', view === 'lichQuanLy');
+    document.getElementById('tabUngTien').classList.toggle('active', view === 'ungTien');
     document.getElementById('tabPhanQuyen').classList.toggle('active', view === 'phanQuyen');
     renderViewContent(view);
   }
@@ -3127,6 +3193,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('tabTinhCong').addEventListener('click', function(){ switchView('tinhCong'); });
   document.getElementById('tabCapNhatTT').addEventListener('click', function(){ switchView('capNhatTT'); });
   document.getElementById('tabLichQuanLy').addEventListener('click', function(){ switchView('lichQuanLy'); });
+  document.getElementById('tabUngTien').addEventListener('click', function(){ switchView('ungTien'); });
   document.getElementById('tabPhanQuyen').addEventListener('click', function(){ switchView('phanQuyen'); });
 
   /* ---------- Lịch Quản lý (mỗi quản lý tự xếp lịch cho chính mình, dạng lịch tháng) ---------- */
@@ -3459,6 +3526,184 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     showToast('Đã xóa lịch ngày này.');
     closeLqlDayModal();
     renderLqlCalendarFor(emp);
+  });
+
+  /* ---------- Ứng tiền (ai cũng vào được, không qua Phân quyền) ---------- */
+  var ADV_PASSWORD = '0000';
+  var advFormOverlay = document.getElementById('advFormOverlay');
+  var advForm = document.getElementById('advForm');
+
+  function openAdvanceForm(){
+    document.getElementById('e_adv_emp').textContent = '';
+    populateSelect(document.getElementById('adv_store'), getDeclaredChiNhanhNames(), '', '-- Chọn cửa hàng --');
+    document.getElementById('adv_emp').innerHTML = '<option value="">-- Chọn cửa hàng trước --</option>';
+    document.getElementById('adv_amount').value = 1000000;
+    advFormOverlay.classList.add('show');
+  }
+  function closeAdvanceForm(){ advFormOverlay.classList.remove('show'); }
+  document.getElementById('btnAddAdvance').addEventListener('click', openAdvanceForm);
+  document.getElementById('advFormClose').addEventListener('click', closeAdvanceForm);
+  document.getElementById('advFormCancel').addEventListener('click', closeAdvanceForm);
+  advFormOverlay.addEventListener('click', function(ev){ if(ev.target === advFormOverlay) closeAdvanceForm(); });
+
+  document.getElementById('adv_store').addEventListener('change', function(){
+    var store = this.value;
+    var empSel = document.getElementById('adv_emp');
+    if(!store){ empSel.innerHTML = '<option value="">-- Chọn cửa hàng trước --</option>'; return; }
+    var emps = state.employees.filter(function(e){ return e.chiNhanh === store; })
+      .sort(function(a,b){ return (a.hoTen||'').localeCompare(b.hoTen||'', 'vi'); });
+    empSel.innerHTML = '<option value="">-- Chọn nhân viên --</option>' +
+      emps.map(function(e){ return '<option value="'+escapeHtml(e.id)+'">'+escapeHtml(e.maNV)+' — '+escapeHtml(e.hoTen||'')+'</option>'; }).join('');
+    if(emps.length === 0) empSel.innerHTML = '<option value="">(Cửa hàng này chưa có nhân viên)</option>';
+  });
+
+  advForm.addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    document.getElementById('e_adv_emp').textContent = '';
+    var store = document.getElementById('adv_store').value;
+    var empId = document.getElementById('adv_emp').value;
+    var amount = Number(document.getElementById('adv_amount').value) || 0;
+    if(!store || !empId){
+      document.getElementById('e_adv_emp').textContent = 'Vui lòng chọn đủ cửa hàng và nhân viên.';
+      return;
+    }
+    if(amount <= 0){
+      document.getElementById('e_adv_emp').textContent = 'Số tiền ứng phải lớn hơn 0.';
+      return;
+    }
+    var emp = state.employees.find(function(e){ return e.id === empId; });
+    if(!emp) return;
+
+    var reqObj = {
+      id: uid(),
+      maNV: emp.maNV, hoTen: emp.hoTen, cuaHang: store,
+      soTienUng: amount,
+      ngayUng: new Date().toISOString(),
+      trangThai: 'Chờ xác nhận',
+      ghiChu: '',
+      taoBoi: window.CURRENT_USERNAME || '', taoLuc: new Date().toISOString(),
+      xacNhanBoi: null, xacNhanLuc: null,
+      nhanTienBoi: null, nhanTienLuc: null
+    };
+    var ok = await mutateStateKeySafe('advanceRequests', function(fresh){ fresh.push(reqObj); });
+    if(!ok) return;
+    showToast('Đã tạo yêu cầu ứng tiền.');
+    closeAdvanceForm();
+    renderAdvanceTable();
+  });
+
+  var ADV_STATUS_TAG = { 'Chờ xác nhận':'tag-2', 'Đã xác nhận':'tag-1', 'Đã nhận tiền ứng':'tag-0' };
+  function renderAdvanceTable(){
+    var tbody = document.getElementById('advTbody');
+    var empty = document.getElementById('advEmptyState');
+    var list = (state.advanceRequests || []).slice().sort(function(a,b){ return (b.ngayUng||'').localeCompare(a.ngayUng||''); });
+    if(list.length === 0){
+      tbody.innerHTML = '';
+      empty.style.display = 'flex';
+      return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = list.map(function(r){
+      var dateLabel = r.ngayUng ? new Date(r.ngayUng).toLocaleDateString('vi-VN') : '';
+      var actionsHtml = '';
+      if(r.trangThai === 'Chờ xác nhận'){
+        actionsHtml = '<button type="button" class="btn btn-primary btn-sm adv-confirm-btn" data-id="'+escapeHtml(r.id)+'">Xác nhận</button>';
+      } else if(r.trangThai === 'Đã xác nhận'){
+        actionsHtml = '<button type="button" class="btn btn-sm adv-receive-btn" data-id="'+escapeHtml(r.id)+'" style="background:var(--gold);color:#fff;border:none;margin-right:6px;">Đã nhận tiền ứng</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm adv-reopen-btn" data-id="'+escapeHtml(r.id)+'">🔓 Mở lại</button>';
+      } else {
+        actionsHtml = '<span style="font-size:11px;color:var(--ink-faint);margin-right:6px;">'+escapeHtml(r.nhanTienBoi||'')+'</span>' +
+          '<button type="button" class="btn btn-ghost btn-sm adv-reopen-btn" data-id="'+escapeHtml(r.id)+'">🔓 Mở lại</button>';
+      }
+      return '<tr>' +
+        '<td style="font-size:12.5px;">'+escapeHtml(dateLabel)+'</td>' +
+        '<td class="col-code">'+escapeHtml(r.maNV)+'</td>' +
+        '<td>'+escapeHtml(r.hoTen||'')+'</td>' +
+        '<td>'+escapeHtml(r.cuaHang||'')+'</td>' +
+        '<td style="text-align:right;font-weight:650;">'+Number(r.soTienUng||0).toLocaleString('vi-VN')+'đ</td>' +
+        '<td><span class="tag '+(ADV_STATUS_TAG[r.trangThai]||'tag-1')+'">'+escapeHtml(r.trangThai)+'</span></td>' +
+        '<td><input type="text" class="adv-note-input" data-id="'+escapeHtml(r.id)+'" value="'+escapeHtml(r.ghiChu||'')+'" placeholder="Ghi chú..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12.5px;"></td>' +
+        '<td>'+actionsHtml+'</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  document.getElementById('advTbody').addEventListener('click', async function(ev){
+    var confirmBtn = ev.target.closest('.adv-confirm-btn');
+    var receiveBtn = ev.target.closest('.adv-receive-btn');
+    var reopenBtn = ev.target.closest('.adv-reopen-btn');
+    if(confirmBtn){
+      if(!confirm('Xác nhận yêu cầu ứng tiền này? Sau khi xác nhận sẽ không sửa được thông tin nữa.')) return;
+      var id1 = confirmBtn.dataset.id;
+      await mutateStateKeySafe('advanceRequests', function(fresh){
+        var idx = fresh.findIndex(function(x){ return x.id === id1; });
+        if(idx !== -1){
+          fresh[idx].trangThai = 'Đã xác nhận';
+          fresh[idx].xacNhanBoi = window.CURRENT_USERNAME || '';
+          fresh[idx].xacNhanLuc = new Date().toISOString();
+        }
+      });
+      showToast('Đã xác nhận, khoá yêu cầu này.');
+      renderAdvanceTable();
+      return;
+    }
+    if(receiveBtn){
+      if(!confirm('Xác nhận nhân viên đã nhận tiền ứng?')) return;
+      var id2 = receiveBtn.dataset.id;
+      await mutateStateKeySafe('advanceRequests', function(fresh){
+        var idx = fresh.findIndex(function(x){ return x.id === id2; });
+        if(idx !== -1){
+          fresh[idx].trangThai = 'Đã nhận tiền ứng';
+          fresh[idx].nhanTienBoi = window.CURRENT_USERNAME || '';
+          fresh[idx].nhanTienLuc = new Date().toISOString();
+        }
+      });
+      showToast('Đã xác nhận nhận tiền ứng.');
+      renderAdvanceTable();
+      return;
+    }
+    if(reopenBtn){
+      var passR = window.prompt('Nhập mật khẩu để mở lại yêu cầu này:');
+      if(passR === null) return;
+      if(passR !== ADV_PASSWORD){ showToast('Sai mật khẩu.', true); return; }
+      var id3 = reopenBtn.dataset.id;
+      await mutateStateKeySafe('advanceRequests', function(fresh){
+        var idx = fresh.findIndex(function(x){ return x.id === id3; });
+        if(idx !== -1){
+          fresh[idx].trangThai = 'Chờ xác nhận';
+          fresh[idx].xacNhanBoi = null; fresh[idx].xacNhanLuc = null;
+          fresh[idx].nhanTienBoi = null; fresh[idx].nhanTienLuc = null;
+        }
+      });
+      showToast('Đã mở lại yêu cầu này.');
+      renderAdvanceTable();
+      return;
+    }
+  });
+
+  document.getElementById('advTbody').addEventListener('change', async function(ev){
+    var input = ev.target.closest('.adv-note-input');
+    if(!input) return;
+    var id = input.dataset.id;
+    var val = input.value;
+    await mutateStateKeySafe('advanceRequests', function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === id; });
+      if(idx !== -1) fresh[idx].ghiChu = val;
+    });
+  });
+
+  document.getElementById('btnExportAdvance').addEventListener('click', function(){
+    var list = state.advanceRequests || [];
+    if(list.length === 0){ showToast('Chưa có yêu cầu nào để xuất.', true); return; }
+    var data = [['Mã NV','Tên NV','Tiền Ứng','Cửa hàng']];
+    list.forEach(function(r){ data.push([r.maNV, r.hoTen, r.soTienUng, r.cuaHang]); });
+    var ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{wch:12},{wch:24},{wch:16},{wch:22}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'UngTien');
+    var wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+    downloadBlob(wbout, 'danh-sach-ung-tien.xlsx', 'application/octet-stream');
+    showToast('Đã xuất file Excel.');
   });
 
   /* ---------- Cập nhật thông tin nhân sự (Request/Duyệt) ---------- */
