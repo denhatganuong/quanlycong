@@ -178,7 +178,9 @@
   }
   .schedule-store-heading h2{font-size:16px;font-weight:700;margin:0 0 2px;color:var(--ink);}
   .schedule-store-heading p{font-size:12.5px;color:var(--ink-soft);margin:0;}
-  .schedule-week-nav{display:flex;align-items:center;gap:8px;}
+  .schedule-week-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+  .lock-note{font-size:11px;color:var(--ink-faint);line-height:1.4;}
+  #scheduleLockNote{flex-basis:100%;text-align:right;}
   .schedule-week-label{font-size:13.3px;font-weight:600;color:var(--ink);white-space:nowrap;min-width:150px;text-align:center;}
   .lock-badge{
     display:inline-flex;align-items:center;gap:5px;
@@ -1001,6 +1003,7 @@
                 <button type="button" id="btnUnlockSchedule" style="background:none;border:none;color:var(--brand-dark);font-weight:700;text-decoration:underline;cursor:pointer;font-size:12px;margin-left:4px;font-family:inherit;">Mở lại</button>
               </span>
               <button class="btn btn-danger btn-sm" id="btnLockSchedule">Chốt công</button>
+              <div class="lock-note" id="scheduleLockNote" style="display:none;"></div>
             </div>
           </div>
 
@@ -2111,6 +2114,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     tkEditingId: null,
     tkDeletingId: null,
     scheduleLocks: {},
+    scheduleLockLog: {},
     holidayMultipliers: {},
     tcMonth: 0,
     tcYear: 0,
@@ -2134,11 +2138,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var SALARY_FIELDS = ["luongCB","chuyenCan","dienThoai","xangXe","hoTroKiemNhiem","kpiKhac"];
 
   /* ---------- Persistence (đổi sang Supabase — dữ liệu dùng chung qua internet) ---------- */
-  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','holidayMultipliers','userPermissions','updateRequests','advanceRequests'];
+  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','scheduleLockLog','holidayMultipliers','userPermissions','updateRequests','advanceRequests'];
   var APP_STATE_DEFAULTS = {
     employees: [], jobTitles: [], shifts: [], salaryAllocations: {}, stores: [],
     schedule: {}, borrowedStaff: {}, employeeScheduleStatus: {}, tasks: [],
-    scheduleLocks: {}, holidayMultipliers: {}, userPermissions: {}, updateRequests: [], advanceRequests: []
+    scheduleLocks: {}, scheduleLockLog: {}, holidayMultipliers: {}, userPermissions: {}, updateRequests: [], advanceRequests: []
   };
   var lastKnownUpdatedAt = {};
 
@@ -2281,6 +2285,27 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function saveBorrowedStaff(){ persistState('borrowedStaff', state.borrowedStaff); }
   function saveEmployeeScheduleStatus(){ persistState('employeeScheduleStatus', state.employeeScheduleStatus); }
   function saveTasks(){ persistState('tasks', state.tasks); }
+  /* Ghi chú lần chốt/mở gần nhất: scheduleLockLog[lockKey] = { action:'lock'|'unlock', by, at } */
+  async function logLockAction(keys, action){
+    var by = window.CURRENT_USERNAME || '';
+    var at = new Date().toISOString();
+    try{
+      await mutateStateKeySafe('scheduleLockLog', function(fresh){
+        keys.forEach(function(k){ fresh[k] = { action: action, by: by, at: at }; });
+      });
+    }catch(e){ console.warn('logLockAction', e); }
+  }
+  function fmtLockNote(keys){
+    var best = null;
+    (keys || []).forEach(function(k){
+      var l = state.scheduleLockLog && state.scheduleLockLog[k];
+      if(l && (!best || l.at > best.at)) best = l;
+    });
+    if(!best) return '';
+    var d = new Date(best.at);
+    var t = pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear()+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
+    return (best.action === 'lock' ? '🔒 Chốt' : '🔓 Mở') + ' gần nhất: ' + escapeHtml(best.by || '—') + ' · ' + t;
+  }
   function saveScheduleLocks(){ persistState('scheduleLocks', state.scheduleLocks); }
   function saveHolidayMultipliers(){ persistState('holidayMultipliers', state.holidayMultipliers); }
   function saveUserPermissions(){ persistState('userPermissions', state.userPermissions); }
@@ -3353,6 +3378,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       html += '<td style="text-align:center;vertical-align:middle;padding:8px;border:1px solid var(--border);background:var(--surface-2);">' +
         '<div style="font-weight:700;font-size:14px;margin-bottom:6px;">'+fmtHoursPlain(weekTotal)+'</div>' +
         lockBtnHtml +
+        (hasData && fmtLockNote(lockKeys) ? '<div class="lock-note" style="margin-top:4px;">'+fmtLockNote(lockKeys)+'</div>' : '') +
       '</td>';
       html += '</tr>';
     });
@@ -3369,8 +3395,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(!confirm('Xác nhận chốt công tuần này cho ' + (lqlActiveEmp ? (lqlActiveEmp.hoTen||lqlActiveEmp.maNV) : '') + '?')) return;
       var nowIso = new Date().toISOString();
       await mutateStateKeySafe('scheduleLocks', function(fresh){
-        keys.forEach(function(k){ fresh[k] = { lockedAt: nowIso }; });
+        keys.forEach(function(k){ fresh[k] = { lockedAt: nowIso, lockedBy: window.CURRENT_USERNAME || '' }; });
       });
+      await logLockAction(keys, 'lock');
       showToast('Đã chốt công tuần này.');
       renderLqlCalendarFor(lqlActiveEmp);
       return;
@@ -3386,6 +3413,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       await mutateStateKeySafe('scheduleLocks', function(fresh){
         ukeys.forEach(function(k){ delete fresh[k]; });
       });
+      await logLockAction(ukeys, 'unlock');
       showToast('Đã mở lại, có thể chỉnh sửa tuần này.');
       renderLqlCalendarFor(lqlActiveEmp);
       return;
@@ -6039,6 +6067,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var lockBtn = document.getElementById('btnLockSchedule');
     lockBtn.style.display = locked ? 'none' : '';
     document.getElementById('scheduleStaffTable').classList.toggle('locked', locked);
+    var noteEl = document.getElementById('scheduleLockNote');
+    var noteHtml = fmtLockNote([getBorrowKey(state.scheduleSelectedStore, state.scheduleWeekStart)]);
+    noteEl.innerHTML = noteHtml; noteEl.style.display = noteHtml ? '' : 'none';
     document.getElementById('btnBorrowStaff').disabled = locked;
 
     var ownStaff = getStoreEmployees(state.scheduleSelectedStore)
@@ -6774,9 +6805,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('lockScheduleConfirm').addEventListener('click', async function(){
     var key = getBorrowKey(state.scheduleSelectedStore, state.scheduleWeekStart);
     var ok = await mutateStateKeySafe('scheduleLocks', function(fresh){
-      fresh[key] = { lockedAt: new Date().toISOString() };
+      fresh[key] = { lockedAt: new Date().toISOString(), lockedBy: window.CURRENT_USERNAME || '' };
     });
     if(!ok) return;
+    await logLockAction([key], 'lock');
     closeLockScheduleModal();
     renderScheduleMain();
     renderScheduleSidebar();
@@ -6809,6 +6841,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       delete fresh[key];
     });
     if(!ok) return;
+    await logLockAction([key], 'unlock');
     closeUnlockScheduleModal();
     renderScheduleMain();
     renderScheduleSidebar();
@@ -7214,6 +7247,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
 
     await mutateStateKeySafe('borrowedStaff', function(fresh){
+      Object.keys(fresh).forEach(function(k){
+        var datePart = k.split('|')[1];
+        if(datePart && datePart < cutoffISO) delete fresh[k];
+      });
+    });
+
+    await mutateStateKeySafe('scheduleLockLog', function(fresh){
       Object.keys(fresh).forEach(function(k){
         var datePart = k.split('|')[1];
         if(datePart && datePart < cutoffISO) delete fresh[k];
