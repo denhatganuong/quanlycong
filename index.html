@@ -7052,7 +7052,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var shown = rows.filter(function(r){
         return !q || (r.e.maNV + ' ' + r.e.hoTen).toLowerCase().indexOf(q) !== -1;
       });
-      return { store: sn, rows: shown, total: total, std: std, diff: total - std };
+      return { store: sn, rows: shown, total: total, std: std, diff: total - std, dayCount: days };
     });
   }
   function cashierWarning(g){
@@ -7079,13 +7079,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         row += '<td class="tc-name-cell col-code">'+escapeHtml(r.e.maNV)+'</td><td class="tc-name-cell"><div class="n">'+escapeHtml(r.e.hoTen||'—')+'</div></td>' +
           '<td class="tc-summary-cell tc-total-cell">'+r.total+'</td>';
         if(i === 0) row += wCell.replace('<td ','<td rowspan="'+g.rows.length+'" ').replace('style="','style="vertical-align:top;');
-        for(var d=1; d<=numDays; d++) row += r.days[d] ? '<td><span class="tc-day-cell work">'+r.days[d]+'</span></td>' : '<td>-</td>';
+        for(var d=1; d<=numDays; d++){
+          var over = (g.dayCount[d] || 0) > 2; // cửa hàng có hơn 2 ca thu ngân trong ngày -> tô đỏ cột ngày
+          var st = over ? ' style="background:#fde2e0;color:#b42318;font-weight:800;"' : '';
+          row += r.days[d] ? '<td'+st+'><span class="tc-day-cell work"'+(over?' style="color:#b42318;font-weight:800;"':'')+'>'+r.days[d]+'</span></td>' : '<td'+st+'>-</td>';
+        }
         return row + '</tr>';
       }).join('');
     }).join('');
     document.getElementById('tcCashTbody').innerHTML = html;
     document.getElementById('tcCashHeading').textContent = 'Bảng danh sách ca thu ngân tháng ' + month + '/' + year;
-    document.getElementById('tcCashSub').textContent = 'Chuẩn ' + (numDays*2) + ' ca/cửa hàng (' + numDays + ' ngày × 2) · ' + warnCount + ' cửa hàng cần chú ý · Ngày chỉ có 1 ca thu ngân được tính 2 ca';
+    document.getElementById('tcCashSub').textContent = 'Chuẩn ' + (numDays*2) + ' ca/cửa hàng (' + numDays + ' ngày × 2) · ' + warnCount + ' cửa hàng cần chú ý · Ngày chỉ có 1 ca thu ngân được tính 2 ca · Cột đỏ = ngày cửa hàng có hơn 2 ca thu ngân';
   }
   document.getElementById('btnExportCashier').addEventListener('click', function(){
     var year = state.tcYear, month = state.tcMonth, numDays = daysInMonth(year, month);
