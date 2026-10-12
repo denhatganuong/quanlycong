@@ -748,6 +748,7 @@
             <th data-key="cmndCccd">CMND/CCCD<span class="sort-ind">↕</span></th>
             <th data-key="stk">STK<span class="sort-ind">↕</span></th>
             <th data-key="nganHang">Ngân hàng<span class="sort-ind">↕</span></th>
+            <th data-key="thanhToan">Thanh toán<span class="sort-ind">↕</span></th>
             <th data-key="diaChi">Địa chỉ<span class="sort-ind">↕</span></th>
             <th data-key="mucLuong" style="text-align:right;">Mức lương<span class="sort-ind">↕</span></th>
             <th data-key="trangThai">Trạng thái<span class="sort-ind">↕</span></th>
@@ -1511,9 +1512,27 @@
               <div class="err" id="e_chiNhanh"></div>
             </div>
             <div class="form-field">
-              <label for="f_chucDanh">Chức danh <span class="req">*</span></label>
+              <label for="f_loaiNV">Chức danh <span class="req">*</span></label>
+              <select id="f_loaiNV">
+                <option value="">-- Chọn loại --</option>
+                <option value="Fulltime">Fulltime</option>
+                <option value="Parttime">Parttime</option>
+              </select>
+              <div class="err" id="e_loaiNV"></div>
+            </div>
+            <div class="form-field" id="field_chucDanhFull" style="display:none;">
+              <label for="f_chucDanh">Chức danh Fulltime <span class="req">*</span></label>
               <select id="f_chucDanh" name="chucDanh"></select>
               <div class="err" id="e_chucDanh"></div>
+            </div>
+            <div class="form-field">
+              <label for="f_thanhToan">Thanh toán <span class="req">*</span></label>
+              <select id="f_thanhToan" name="thanhToan">
+                <option value="">-- Chọn hình thức --</option>
+                <option value="Chuyển khoản">Chuyển khoản</option>
+                <option value="Tiền mặt">Tiền mặt</option>
+              </select>
+              <div class="err" id="e_thanhToan"></div>
             </div>
             <div class="form-field">
               <label for="f_trangThai">Trạng thái <span class="req">*</span></label>
@@ -2144,7 +2163,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     maNV:"Mã NV", hoTen:"Họ tên", hoKinhDoanh:"Hộ kinh doanh", chiNhanh:"Chi nhánh",
     chucDanh:"Chức danh", ngayVaoLam:"Ngày vào làm", ngaySinh:"Ngày sinh", sdt:"SĐT",
     cmndCccd:"CMND/CCCD", stk:"STK", nganHang:"Ngân hàng", diaChi:"Địa chỉ",
-    mucLuong:"Mức lương", trangThai:"Trạng thái"
+    mucLuong:"Mức lương", trangThai:"Trạng thái", thanhToan:"Thanh toán"
   };
 
   var SHIFT_FIELD_LABELS = {
@@ -2528,6 +2547,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '<td class="col-nowrap">'+escapeHtml(e.cmndCccd||'—')+'</td>' +
         '<td class="col-nowrap">'+escapeHtml(e.stk||'—')+'</td>' +
         '<td>'+escapeHtml(e.nganHang||'—')+'</td>' +
+        '<td class="col-nowrap">'+escapeHtml(e.thanhToan||'—')+'</td>' +
         '<td class="col-address">'+escapeHtml(e.diaChi||'—')+'</td>' +
         '<td class="col-salary">'+fmtMoney(e.mucLuong)+'</td>' +
         '<td><span class="badge '+statusBadgeClass(e.trangThai)+'">'+escapeHtml(e.trangThai||'—')+'</span></td>' +
@@ -2581,6 +2601,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return 'NEW' + String(next).padStart(digits, '0');
   }
 
+  // Chức danh: chọn Fulltime/Parttime trước; Fulltime mới hiện danh sách chức danh khác (tránh chọn nhầm Parttime).
+  function getParttimeTitleName(){
+    var found = getDeclaredChucDanhNames().find(function(n){ return normalizeHeader(n) === 'parttime'; });
+    return found || 'Parttime';
+  }
+  function refreshChucDanhUI(selectedTitle){
+    var loai = document.getElementById('f_loaiNV').value;
+    var wrap = document.getElementById('field_chucDanhFull');
+    wrap.style.display = loai === 'Fulltime' ? '' : 'none';
+    var fulls = getDeclaredChucDanhNames().filter(function(n){ return normalizeHeader(n) !== 'parttime'; });
+    populateSelect(document.getElementById('f_chucDanh'), fulls, selectedTitle || '', '-- Chọn chức danh --');
+  }
+  document.getElementById('f_loaiNV').addEventListener('change', function(){ refreshChucDanhUI(''); });
+
   function openForm(id){
     state.editingId = id || null;
     clearFormErrors();
@@ -2593,7 +2627,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       fieldManV.style.display = '';
       fieldHkd.style.display = '';
       populateSelect(document.getElementById('f_chiNhanh'), getDeclaredChiNhanhNames(), e.chiNhanh || '', '-- Chọn cửa hàng --');
-      populateSelect(document.getElementById('f_chucDanh'), getDeclaredChucDanhNames(), e.chucDanh || '', '-- Chọn chức danh --');
+      var isPT = normalizeHeader(e.chucDanh || '') === 'parttime';
+      document.getElementById('f_loaiNV').value = isPT ? 'Parttime' : (e.chucDanh ? 'Fulltime' : '');
+      refreshChucDanhUI(isPT ? '' : (e.chucDanh || ''));
       setFormValues(e);
     } else {
       document.getElementById('formTitle').textContent = 'Thêm nhân viên';
@@ -2601,7 +2637,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       fieldManV.style.display = 'none';
       fieldHkd.style.display = 'none';
       populateSelect(document.getElementById('f_chiNhanh'), getDeclaredChiNhanhNames(), '', '-- Chọn cửa hàng --');
-      populateSelect(document.getElementById('f_chucDanh'), getDeclaredChucDanhNames(), '', '-- Chọn chức danh --');
+      document.getElementById('f_loaiNV').value = '';
+      refreshChucDanhUI('');
       document.getElementById('f_maNV').value = generateNewMaNV();
       document.getElementById('f_hkd').value = '';
       document.getElementById('f_trangThai').value = 'Thử việc';
@@ -2626,6 +2663,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     document.getElementById('f_diaChi').value = e.diaChi || '';
     document.getElementById('f_stk').value = e.stk || '';
     document.getElementById('f_nganHang').value = e.nganHang || '';
+    document.getElementById('f_thanhToan').value = e.thanhToan || '';
   }
 
   function closeForm(){
@@ -2633,7 +2671,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     state.editingId = null;
   }
 
-  var ALL_FORM_ERR_IDS = ['e_maNV','e_hoTen','e_sdt','e_cmnd','e_stk','e_hoKinhDoanh','e_chiNhanh','e_chucDanh','e_ngayVaoLam','e_mucLuong','e_ngaySinh','e_diaChi','e_nganHang'];
+  var ALL_FORM_ERR_IDS = ['e_maNV','e_hoTen','e_sdt','e_cmnd','e_stk','e_hoKinhDoanh','e_chiNhanh','e_chucDanh','e_ngayVaoLam','e_mucLuong','e_ngaySinh','e_diaChi','e_nganHang','e_loaiNV','e_thanhToan'];
   function clearFormErrors(){
     ALL_FORM_ERR_IDS.forEach(function(id){
       document.getElementById(id).textContent = '';
@@ -2646,7 +2684,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var REQUIRED_FIELD_LABELS = {
     chiNhanh:'chi nhánh', chucDanh:'chức danh',
     ngayVaoLam:'ngày vào làm', mucLuong:'mức lương', ngaySinh:'ngày sinh',
-    sdt:'số điện thoại', cmndCccd:'CMND/CCCD', diaChi:'địa chỉ', stk:'số tài khoản', nganHang:'ngân hàng'
+    sdt:'số điện thoại', cmndCccd:'CMND/CCCD', diaChi:'địa chỉ', stk:'số tài khoản', nganHang:'ngân hàng', thanhToan:'hình thức thanh toán'
   };
 
   function validateForm(data){
@@ -2699,13 +2737,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     maNV:'e_maNV', hoTen:'e_hoTen', sdt:'e_sdt', cmndCccd:'e_cmnd', stk:'e_stk',
     hoKinhDoanh:'e_hoKinhDoanh', chiNhanh:'e_chiNhanh', chucDanh:'e_chucDanh',
     ngayVaoLam:'e_ngayVaoLam', mucLuong:'e_mucLuong', ngaySinh:'e_ngaySinh',
-    diaChi:'e_diaChi', nganHang:'e_nganHang'
+    diaChi:'e_diaChi', nganHang:'e_nganHang', thanhToan:'e_thanhToan'
   };
   var FORM_INPUT_ID = {
     maNV:'f_maNV', hoTen:'f_hoTen', sdt:'f_sdt', cmndCccd:'f_cmnd', stk:'f_stk',
     hoKinhDoanh:'f_hkd', chiNhanh:'f_chiNhanh', chucDanh:'f_chucDanh',
     ngayVaoLam:'f_ngayVaoLam', mucLuong:'f_mucLuong', ngaySinh:'f_ngaySinh',
-    diaChi:'f_diaChi', nganHang:'f_nganHang'
+    diaChi:'f_diaChi', nganHang:'f_nganHang', thanhToan:'f_thanhToan'
   };
 
   empForm.addEventListener('submit', async function(ev){
@@ -2715,13 +2753,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var data = {};
     fd.forEach(function(v,k){ data[k] = typeof v === 'string' ? v.trim() : v; });
     if(data.hoTen) data.hoTen = data.hoTen.toUpperCase();
+    var loaiNV = document.getElementById('f_loaiNV').value;
+    if(loaiNV === 'Parttime') data.chucDanh = getParttimeTitleName();
+    else if(loaiNV === '') data.chucDanh = '';
 
     var errors = validateForm(data);
     if(Object.keys(errors).length){
       Object.keys(errors).forEach(function(k){
-        var errEl = document.getElementById(FORM_ERR_ID[k]);
-        if(errEl) errEl.textContent = errors[k];
-        var inputEl = document.getElementById(FORM_INPUT_ID[k]);
+        var noLoai = (k === 'chucDanh' && loaiNV === '');
+        var errEl = document.getElementById(noLoai ? 'e_loaiNV' : FORM_ERR_ID[k]);
+        if(errEl) errEl.textContent = noLoai ? 'Vui lòng chọn Fulltime hoặc Parttime.' : errors[k];
+        var inputEl = document.getElementById(noLoai ? 'f_loaiNV' : FORM_INPUT_ID[k]);
         if(inputEl) inputEl.classList.add('invalid');
       });
       return;
@@ -2836,7 +2878,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     avEl.className = 'avatar tag-' + hashIndex(e.hoTen || e.maNV);
     avEl.style.width = '38px'; avEl.style.height = '38px'; avEl.style.fontSize = '14px';
     avEl.textContent = initials(e.hoTen);
-    var order = ['maNV','hoTen','hoKinhDoanh','chiNhanh','chucDanh','trangThai','ngayVaoLam','ngaySinh','sdt','cmndCccd','stk','nganHang','diaChi','mucLuong'];
+    var order = ['maNV','hoTen','hoKinhDoanh','chiNhanh','chucDanh','trangThai','ngayVaoLam','ngaySinh','sdt','cmndCccd','stk','nganHang','thanhToan','diaChi','mucLuong'];
     var html = order.map(function(k){
       var raw = e[k];
       var display;
@@ -3170,8 +3212,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   document.getElementById('btnExportEmployees').addEventListener('click', function(){
     if(state.employees.length === 0){ showToast('Không có dữ liệu để xuất.', true); return; }
-    var headers = ['Mã NV','Họ tên','Hộ kinh doanh','Chi nhánh','Chức danh','Ngày vào làm','Ngày sinh','SĐT','CMND/CCCD','STK','Ngân hàng','Địa chỉ','Mức lương','Trạng thái','Cập nhật gần nhất'];
-    var keys = ['maNV','hoTen','hoKinhDoanh','chiNhanh','chucDanh','ngayVaoLam','ngaySinh','sdt','cmndCccd','stk','nganHang','diaChi','mucLuong','trangThai'];
+    var headers = ['Mã NV','Họ tên','Hộ kinh doanh','Chi nhánh','Chức danh','Ngày vào làm','Ngày sinh','SĐT','CMND/CCCD','STK','Ngân hàng','Thanh toán','Địa chỉ','Mức lương','Trạng thái','Cập nhật gần nhất'];
+    var keys = ['maNV','hoTen','hoKinhDoanh','chiNhanh','chucDanh','ngayVaoLam','ngaySinh','sdt','cmndCccd','stk','nganHang','thanhToan','diaChi','mucLuong','trangThai'];
     var data = [headers];
     state.employees.forEach(function(e){
       var row = keys.map(function(k){ return e[k] !== undefined && e[k] !== null ? e[k] : ''; });
