@@ -322,13 +322,13 @@
   .timeline-block:hover{filter:brightness(0.92);}
 
   /* ---------- Tính công (monthly timesheet) ---------- */
-  #tcTable{border-collapse:collapse;}
-  #tcTable thead th{
+  #tcTable, #tcCashTable{border-collapse:collapse;}
+  #tcTable thead th, #tcCashTable thead th{
     position:sticky;top:0;background:var(--surface-2);border-bottom:1px solid var(--border);border-right:1px solid var(--border);
     font-size:11px;font-weight:650;color:var(--ink-soft);padding:8px 4px;text-align:center;white-space:nowrap;
   }
-  #tcTable thead th.tc-head-fixed{text-align:left;padding-left:10px;min-width:120px;}
-  #tcTable thead th.tc-day-head{min-width:40px;}
+  #tcTable thead th.tc-head-fixed, #tcCashTable thead th.tc-head-fixed{text-align:left;padding-left:10px;min-width:120px;}
+  #tcTable thead th.tc-day-head, #tcCashTable thead th.tc-day-head{min-width:40px;}
   #tcHolidayRow th{background:var(--gold-soft);padding:3px 2px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);}
   #tcHolidayRow th.tc-head-fixed{background:var(--surface-2);font-size:10.5px;font-weight:650;color:var(--gold-dark);text-align:left;padding-left:10px;}
   .tc-holiday-select{
@@ -340,10 +340,10 @@
     padding:8px 10px;border-bottom:1px solid var(--border);border-top:1px solid var(--border);
   }
   .tc-store-row .tc-mgr{font-weight:500;color:var(--ink-soft);font-size:11.5px;}
-  #tcTable tbody td{padding:6px 4px;text-align:center;font-size:11.5px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;}
-  #tcTable tbody td.tc-name-cell{text-align:left;padding-left:10px;}
-  #tcTable tbody td.tc-name-cell .n{font-weight:650;font-size:12.5px;color:var(--ink);white-space:nowrap;}
-  #tcTable tbody td.tc-name-cell .s{font-size:11px;color:var(--ink-faint);}
+  #tcTable tbody td, #tcCashTable tbody td{padding:6px 4px;text-align:center;font-size:11.5px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;}
+  #tcTable tbody td.tc-name-cell, #tcCashTable tbody td.tc-name-cell{text-align:left;padding-left:10px;}
+  #tcTable tbody td.tc-name-cell .n, #tcCashTable tbody td.tc-name-cell .n{font-weight:650;font-size:12.5px;color:var(--ink);white-space:nowrap;}
+  #tcTable tbody td.tc-name-cell .s, #tcCashTable tbody td.tc-name-cell .s{font-size:11px;color:var(--ink-faint);}
   .tc-day-cell{
     display:inline-flex;align-items:center;justify-content:center;
     min-width:34px;padding:3px 2px;font-size:10.8px;font-weight:500;
@@ -352,9 +352,9 @@
   .tc-day-cell.work{background:none;color:var(--ink-soft);font-weight:500;}
   .tc-day-cell.special{background:none;color:var(--ink-soft);font-weight:500;}
   .tc-day-cell.off{background:var(--surface-2);color:var(--ink);font-weight:800;padding:3px 7px;border-radius:4px;border:1px solid var(--border);}
-  #tcTable thead th.tc-summary-head{min-width:88px;background:var(--brand-soft);color:var(--brand-dark);}
-  #tcTable tbody td.tc-summary-cell{background:var(--brand-soft);color:var(--brand-dark);font-weight:600;font-variant-numeric:tabular-nums;min-width:88px;}
-  #tcTable tbody td.tc-total-cell{background:var(--brand);color:#fff;font-weight:800;}
+  #tcTable thead th.tc-summary-head, #tcCashTable thead th.tc-summary-head{min-width:88px;background:var(--brand-soft);color:var(--brand-dark);}
+  #tcTable tbody td.tc-summary-cell, #tcCashTable tbody td.tc-summary-cell{background:var(--brand-soft);color:var(--brand-dark);font-weight:600;font-variant-numeric:tabular-nums;min-width:88px;}
+  #tcTable tbody td.tc-total-cell, #tcCashTable tbody td.tc-total-cell{background:var(--brand);color:#fff;font-weight:800;}
 
   @media (max-width:900px){
     .schedule-shell{flex-direction:column;}
@@ -1083,6 +1083,22 @@
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v16"/></svg>
         <h3>Không có dữ liệu</h3>
         <p>Chưa có nhân viên hoặc chưa có lịch nào được xếp trong tháng này.</p>
+      </div>
+    </div>
+
+    <div class="config-section-head" style="margin:22px 0 10px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
+      <div style="flex:1 1 300px;">
+        <h2 id="tcCashHeading" style="font-size:15px;">Bảng danh sách ca thu ngân</h2>
+        <p id="tcCashSub">—</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="btnExportCashier">📥 Xuất Excel</button>
+    </div>
+    <div class="table-card">
+      <div class="table-scroll table-scroll-tall">
+        <table class="emp-table" id="tcCashTable" style="min-width:1200px;">
+          <thead><tr id="tcCashHead"></tr></thead>
+          <tbody id="tcCashTbody"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -6985,6 +7001,115 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   /* ---------- Tính công: rendering ---------- */
+  /* ---------- Tính công: Bảng danh sách ca thu ngân ---------- */
+  function isCashierTask(name){
+    var n = String(name || '').normalize('NFC').trim().toLowerCase().replace(/\s+/g,' ');
+    return n === 'thu ngân' || n === 'thu ngân bán hàng';
+  }
+  // Mỗi ca có công việc Thu ngân / Thu ngân bán hàng = 1 ca. Nếu cả cửa hàng trong ngày chỉ có đúng 1 ca thu ngân -> người đứng ca đó tính 2 ca.
+  function computeCashierData(year, month, numDays){
+    var allowed = (state.currentUserPerm && state.currentUserPerm.stores && state.currentUserPerm.stores.length) ? state.currentUserPerm.stores : null;
+    var storeNames = state.stores.map(function(s){ return s.tenCuaHang; }).filter(function(n){
+      if(allowed && allowed.indexOf(n) === -1) return false;
+      if(state.tcFilterStore && n !== state.tcFilterStore) return false;
+      return true;
+    }).sort(function(a,b){ return a.localeCompare(b,'vi'); });
+    var nameSet = {}; storeNames.forEach(function(n){ nameSet[n] = true; });
+    var per = {}; // store -> maNV -> [days]
+    var storeDay = {}; // store -> [count per day]
+    var prefix = year + '-' + pad2(month) + '-';
+    var empByCode = {}; state.employees.forEach(function(e){ empByCode[e.maNV] = e; });
+    Object.keys(state.schedule).forEach(function(k){
+      var parts = k.split('|'), maNV = parts[0], date = parts[1];
+      if(!date || date.indexOf(prefix) !== 0 || !empByCode[maNV]) return;
+      var entry = state.schedule[k];
+      if(!entry || entry.off) return;
+      var day = Number(date.slice(8,10));
+      getScheduleShiftObjects(maNV, date).forEach(function(o){
+        if(!o.store || !nameSet[o.store] || !isCashierTask(o.task)) return;
+        per[o.store] = per[o.store] || {}; storeDay[o.store] = storeDay[o.store] || [];
+        var arr = per[o.store][maNV] = per[o.store][maNV] || [];
+        arr[day] = (arr[day] || 0) + 1;
+        storeDay[o.store][day] = (storeDay[o.store][day] || 0) + 1;
+      });
+    });
+    var q = (state.tcSearch || '').trim().toLowerCase();
+    var std = numDays * 2;
+    return storeNames.map(function(sn){
+      var people = per[sn] || {};
+      var days = storeDay[sn] || [];
+      var total = 0;
+      var rows = Object.keys(people).map(function(maNV){
+        var arr = people[maNV], dayVals = [], sum = 0;
+        for(var d=1; d<=numDays; d++){
+          var v = arr[d] || 0;
+          if(v > 0 && days[d] === 1) v = 2; // chỉ 1 ca thu ngân trong ngày -> tính 2 ca
+          dayVals[d] = v; sum += v;
+        }
+        total += sum;
+        return { e: empByCode[maNV], days: dayVals, total: sum };
+      }).sort(function(a,b){ return (a.e.hoTen||'').localeCompare(b.e.hoTen||'','vi'); });
+      var shown = rows.filter(function(r){
+        return !q || (r.e.maNV + ' ' + r.e.hoTen).toLowerCase().indexOf(q) !== -1;
+      });
+      return { store: sn, rows: shown, total: total, std: std, diff: total - std };
+    });
+  }
+  function cashierWarning(g){
+    if(g.diff === 0) return { ok:true, text:'✓ Đủ ' + g.std + ' ca' };
+    return { ok:false, text:'⚠ ' + (g.diff < 0 ? 'Thiếu ' + (-g.diff) : 'Thừa ' + g.diff) + ' ca (' + g.total + '/' + g.std + ')' };
+  }
+  function renderTcCashier(){
+    var year = state.tcYear, month = state.tcMonth, numDays = daysInMonth(year, month);
+    var data = computeCashierData(year, month, numDays);
+    var head = '<th class="tc-head-fixed">CỬA HÀNG</th><th class="tc-head-fixed">MÃ NV</th><th class="tc-head-fixed">TÊN NV</th><th class="tc-summary-head">TỔNG CA THU NGÂN</th><th class="tc-summary-head">CẢNH BÁO CH</th>';
+    for(var d=1; d<=numDays; d++) head += '<th class="tc-day-head">'+d+'</th>';
+    document.getElementById('tcCashHead').innerHTML = head;
+    var warnCount = 0;
+    var html = data.map(function(g){
+      var w = cashierWarning(g); if(!w.ok) warnCount++;
+      var wCell = '<td style="font-weight:700;white-space:nowrap;color:'+(w.ok?'var(--brand-dark)':'#c0392b')+';">'+escapeHtml(w.text)+'</td>';
+      if(g.rows.length === 0){
+        var tds = ''; for(var d=1; d<=numDays; d++) tds += '<td>-</td>';
+        return '<tr><td class="tc-name-cell"><div class="n">'+escapeHtml(g.store)+'</div></td><td colspan="2" style="color:var(--ink-faint);">Chưa có ca thu ngân</td><td class="tc-summary-cell">0</td>'+wCell+tds+'</tr>';
+      }
+      return g.rows.map(function(r, i){
+        var row = '<tr>';
+        if(i === 0) row += '<td class="tc-name-cell" rowspan="'+g.rows.length+'" style="vertical-align:top;"><div class="n">'+escapeHtml(g.store)+'</div></td>';
+        row += '<td class="tc-name-cell col-code">'+escapeHtml(r.e.maNV)+'</td><td class="tc-name-cell"><div class="n">'+escapeHtml(r.e.hoTen||'—')+'</div></td>' +
+          '<td class="tc-summary-cell tc-total-cell">'+r.total+'</td>';
+        if(i === 0) row += wCell.replace('<td ','<td rowspan="'+g.rows.length+'" ').replace('style="','style="vertical-align:top;');
+        for(var d=1; d<=numDays; d++) row += r.days[d] ? '<td><span class="tc-day-cell work">'+r.days[d]+'</span></td>' : '<td>-</td>';
+        return row + '</tr>';
+      }).join('');
+    }).join('');
+    document.getElementById('tcCashTbody').innerHTML = html;
+    document.getElementById('tcCashHeading').textContent = 'Bảng danh sách ca thu ngân tháng ' + month + '/' + year;
+    document.getElementById('tcCashSub').textContent = 'Chuẩn ' + (numDays*2) + ' ca/cửa hàng (' + numDays + ' ngày × 2) · ' + warnCount + ' cửa hàng cần chú ý · Ngày chỉ có 1 ca thu ngân được tính 2 ca';
+  }
+  document.getElementById('btnExportCashier').addEventListener('click', function(){
+    var year = state.tcYear, month = state.tcMonth, numDays = daysInMonth(year, month);
+    var data = computeCashierData(year, month, numDays);
+    var rows = [['Cửa hàng','Mã NV','Tên NV','Tổng ca thu ngân','Cảnh báo CH']];
+    for(var d=1; d<=numDays; d++) rows[0].push(d);
+    data.forEach(function(g){
+      var w = cashierWarning(g).text;
+      if(g.rows.length === 0){ var r0=[g.store,'','',0,w]; for(var d=1; d<=numDays; d++) r0.push(''); rows.push(r0); return; }
+      g.rows.forEach(function(r){
+        var row = [g.store, r.e.maNV, r.e.hoTen||'', r.total, w];
+        for(var d=1; d<=numDays; d++) row.push(r.days[d] || '');
+        rows.push(row);
+      });
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:24},{wch:12},{wch:26},{wch:16},{wch:26}].concat(Array.from({length:numDays},function(){return {wch:4};}));
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'CaThuNgan');
+    var wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
+    downloadBlob(wbout, 'ca-thu-ngan-' + year + '-' + pad2(month) + '.xlsx', 'application/octet-stream');
+    showToast('Đã xuất file Excel.');
+  });
+
   function renderTinhCong(){
     var monthSel = document.getElementById('tcMonth');
     if(monthSel.options.length === 0){
@@ -7076,6 +7201,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     document.getElementById('tcHeading').textContent = 'Bảng chấm công tháng ' + month + '/' + year;
     document.getElementById('tcSubheading').textContent = filtered.length + ' nhân viên · ' + (state.tcFilterStore || 'Tất cả cửa hàng');
+    renderTcCashier();
   }
 
   document.getElementById('tcMonth').addEventListener('change', function(ev){
