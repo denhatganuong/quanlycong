@@ -2260,11 +2260,37 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // CHƯA thay đổi kể từ lúc mình vừa đọc. Nếu có ai (kể cả 1 tiến trình khác của chính app) vừa ghi
   // trước mình trong lúc mình đang xử lý, sẽ tự động đọc lại bản mới nhất và áp lại thay đổi — không
   // bao giờ có chuyện 2 lần ghi cùng lúc đè mất nhau, kể cả khi xảy ra gần như đồng thời.
+  // Giới hạn thời gian mỗi lần gọi máy chủ để thao tác không bao giờ bị "treo" vô hạn.
+  function withTimeout(promise, ms){
+    return new Promise(function(resolve, reject){
+      var t = setTimeout(function(){ reject(new Error('timeout')); }, ms);
+      Promise.resolve(promise).then(function(v){ clearTimeout(t); resolve(v); }, function(e){ clearTimeout(t); reject(e); });
+    });
+  }
   async function mutateStateKeySafe(key, mutateFn, maxRetries){
     maxRetries = maxRetries || 6;
     for(var attempt = 0; attempt < maxRetries; attempt++){
       try{
-        var res = await window.supabaseClient.from('app_state').select('data,updated_at').eq('key', key).maybeSingle();
+        if(attempt > 0) await new Promise(function(r){ setTimeout(r, 120 * attempt); }); // nghỉ ngắn giữa các lần thử lại để tránh đụng nhau liên tục
+        // ĐƯỜNG NHANH: dữ liệu trên máy luôn được Realtime giữ mới -> ghi thẳng 1 lượt (không tải lại cả bảng lớn).
+        // Vẫn an toàn tuyệt đối: chỉ ghi khi updated_at trên máy chủ còn đúng bản mình đang có; nếu lệch -> tự chuyển sang đường đọc-lại-rồi-ghi bên dưới.
+        if(attempt === 0 && lastKnownUpdatedAt[key] && state[key] && typeof state[key] === 'object'){
+          var localCopy = JSON.parse(JSON.stringify(state[key]));
+          var r0 = mutateFn(localCopy);
+          if(r0 === false) return false;
+          var fastNow = new Date().toISOString();
+          var fastRes = await withTimeout(window.supabaseClient.from('app_state')
+            .update({ data: localCopy, updated_at: fastNow })
+            .eq('key', key).eq('updated_at', lastKnownUpdatedAt[key])
+            .select('updated_at'), 20000);
+          if(!fastRes.error && fastRes.data && fastRes.data.length > 0){
+            state[key] = localCopy;
+            lastKnownUpdatedAt[key] = fastRes.data[0].updated_at;
+            return true;
+          }
+          // lệch phiên bản -> rơi xuống đường chậm (đọc bản mới nhất, áp lại thay đổi, ghi lại)
+        }
+        var res = await withTimeout(window.supabaseClient.from('app_state').select('data,updated_at').eq('key', key).maybeSingle(), 20000);
         var raw = (res.data && res.data.data !== undefined && res.data.data !== null) ? res.data.data : null;
         var knownUpdatedAt = res.data ? res.data.updated_at : null;
         var fresh = raw !== null ? raw : (Array.isArray(APP_STATE_DEFAULTS[key]) ? [] : {});
@@ -2275,17 +2301,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var nowIso = new Date().toISOString();
         if(knownUpdatedAt === null){
           // Chưa từng có dòng này trong database -> tạo mới
-          var insertRes = await window.supabaseClient.from('app_state').insert({ key: key, data: fresh, updated_at: nowIso }).select('updated_at').single();
+          var insertRes = await withTimeout(window.supabaseClient.from('app_state').insert({ key: key, data: fresh, updated_at: nowIso }).select('updated_at').single(), 20000);
           if(insertRes.error){ continue; } // ai đó vừa tạo trước mình -> thử lại vòng sau với dữ liệu mới nhất
           state[key] = fresh;
           lastKnownUpdatedAt[key] = insertRes.data ? insertRes.data.updated_at : nowIso;
           return true;
         } else {
           // Chỉ ghi nếu updated_at trên máy chủ vẫn còn đúng như lúc mình vừa đọc (chưa ai ghi đè trước mình)
-          var updateRes = await window.supabaseClient.from('app_state')
+          var updateRes = await withTimeout(window.supabaseClient.from('app_state')
             .update({ data: fresh, updated_at: nowIso })
             .eq('key', key).eq('updated_at', knownUpdatedAt)
-            .select('updated_at');
+            .select('updated_at'), 20000);
           if(updateRes.error) throw updateRes.error;
           if(!updateRes.data || updateRes.data.length === 0){
             continue; // có người/tiến trình khác vừa ghi trước mình -> đọc lại bản mới nhất, thử lại
@@ -6282,7 +6308,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   async function setShiftTask(maNV, date, code, taskName){
     var key = scheduleKey(maNV, date);
-    await saveScheduleMutation(function(fresh){
+    return await saveScheduleMutation(function(fresh){
       var entry = fresh[key];
       if(!entry || !Array.isArray(entry.shifts)) return;
       entry.shifts = entry.shifts.map(function(s){
@@ -6330,7 +6356,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('timelineTaskSave').addEventListener('click', async function(){
     if(!state.timelineTaskMaNV) return;
     var val = document.getElementById('timelineTaskSelect').value;
-    await setShiftTask(state.timelineTaskMaNV, state.timelineTaskDate, state.timelineTaskCode, val);
+    var btn = document.getElementById('timelineTaskSave');
+    if(btn.disabled) return; // đang lưu, tránh bấm nhiều lần
+    var oldLabel = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Đang lưu…';
+    var ok = false;
+    try{ ok = await setShiftTask(state.timelineTaskMaNV, state.timelineTaskDate, state.timelineTaskCode, val); }
+    finally{ btn.disabled = false; btn.textContent = oldLabel; }
+    if(!ok) return; // lỗi đã báo; giữ popup mở để bấm Lưu lại
     showToast('Đã cập nhật công việc.');
     closeTimelineTaskModal();
   });
@@ -7393,6 +7426,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, function(payload){
         var row = payload.new || payload.old;
         if(!row || !row.key) return;
+        // Bỏ qua tín hiệu "vọng lại" từ chính thay đổi của máy mình (đã có dữ liệu mới nhất) -> không tải lại bảng lớn vô ích.
+        if(payload.new && payload.new.updated_at && lastKnownUpdatedAt[row.key] &&
+           Date.parse(payload.new.updated_at) === Date.parse(lastKnownUpdatedAt[row.key])) return;
         scheduleRealtimeRefetch(row.key);
       })
       .subscribe();
