@@ -1512,7 +1512,7 @@
               <div class="err" id="e_chiNhanh"></div>
             </div>
             <div class="form-field">
-              <label for="f_loaiNV">Chức danh <span class="req">*</span></label>
+              <label for="f_loaiNV">Loại hình công việc <span class="req">*</span></label>
               <select id="f_loaiNV">
                 <option value="">-- Chọn loại --</option>
                 <option value="Fulltime">Fulltime</option>
@@ -1521,7 +1521,7 @@
               <div class="err" id="e_loaiNV"></div>
             </div>
             <div class="form-field" id="field_chucDanhFull" style="display:none;">
-              <label for="f_chucDanh">Chức danh Fulltime <span class="req">*</span></label>
+              <label for="f_chucDanh">Vị trí công việc <span class="req">*</span></label>
               <select id="f_chucDanh" name="chucDanh"></select>
               <div class="err" id="e_chucDanh"></div>
             </div>
@@ -2788,7 +2788,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       Object.keys(errors).forEach(function(k){
         var noLoai = (k === 'chucDanh' && loaiNV === '');
         var errEl = document.getElementById(noLoai ? 'e_loaiNV' : FORM_ERR_ID[k]);
-        if(errEl) errEl.textContent = noLoai ? 'Vui lòng chọn Fulltime hoặc Parttime.' : errors[k];
+        if(errEl) errEl.textContent = noLoai ? 'Vui lòng chọn loại hình công việc (Fulltime hoặc Parttime).' : errors[k];
         var inputEl = document.getElementById(noLoai ? 'f_loaiNV' : FORM_INPUT_ID[k]);
         if(inputEl) inputEl.classList.add('invalid');
       });
