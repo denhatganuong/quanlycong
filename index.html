@@ -723,7 +723,7 @@
     <select class="filter" id="filterTitle"><option value="">Tất cả chức danh</option></select>
     <select class="filter" id="filterStatus">
       <option value="">Tất cả trạng thái</option>
-      <option value="Đang làm việc">Đang làm việc</option>
+      <option value="Chính thức">Chính thức</option>
       <option value="Thử việc">Thử việc</option>
       <option value="Tạm nghỉ">Tạm nghỉ</option>
       <option value="Nghỉ việc">Nghỉ việc</option>
@@ -1109,6 +1109,31 @@
   <div class="view-actions">
     <button class="btn btn-primary btn-sm" id="btnAddUpdateRequest">+ Tạo yêu cầu cập nhật</button>
   </div>
+  <div class="toolbar" style="align-items:flex-end;flex-wrap:wrap;">
+    <div class="search-wrap" style="flex:1 1 220px;align-self:flex-end;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="text" id="urSearchInput" placeholder="Tìm mã NV / tên / người tạo / lý do...">
+    </div>
+    <select class="filter" id="urFilterStatus" style="align-self:flex-end;">
+      <option value="">Tất cả trạng thái</option>
+      <option value="Chờ duyệt">Chờ xử lý</option>
+      <option value="Đã duyệt">Đã ghi DB</option>
+      <option value="Từ chối">Đã hủy</option>
+    </select>
+    <select class="filter" id="urFilterOm" style="align-self:flex-end;">
+      <option value="">Tất cả (OM)</option>
+      <option value="none">Chờ OM</option>
+      <option value="confirmed">OM đã xác nhận</option>
+      <option value="rejected">OM từ chối</option>
+    </select>
+    <select class="filter" id="urFilterField" style="align-self:flex-end;"><option value="">Tất cả nội dung thay đổi</option></select>
+    <select class="filter" id="urFilterStore" style="align-self:flex-end;"><option value="">Tất cả cửa hàng</option></select>
+    <select class="filter" id="urFilterUser" style="align-self:flex-end;"><option value="">Tất cả người tạo</option></select>
+    <div class="form-field" style="min-width:130px;"><label style="font-size:11.5px;">Từ ngày</label><input type="date" class="filter" id="urFilterFrom" style="padding:8px 10px;"></div>
+    <div class="form-field" style="min-width:130px;"><label style="font-size:11.5px;">Đến ngày</label><input type="date" class="filter" id="urFilterTo" style="padding:8px 10px;"></div>
+    <button class="btn btn-ghost btn-sm" id="urFilterClear" style="align-self:flex-end;">Xóa lọc</button>
+  </div>
+  <p id="urCount" style="font-size:12px;color:var(--ink-faint);margin:4px 2px 8px;"></p>
   <div class="table-scroll">
     <table class="emp-table perm-table" id="urTable">
       <thead>
@@ -1118,8 +1143,9 @@
           <th>Nội dung thay đổi</th>
           <th style="width:130px;">Người tạo</th>
           <th style="width:150px;">Ngày tạo</th>
-          <th style="width:110px;">Trạng thái</th>
-          <th style="width:170px;"></th>
+          <th style="width:130px;">Trạng thái</th>
+          <th style="width:200px;">Lý do / Ghi chú</th>
+          <th style="width:230px;"></th>
         </tr>
       </thead>
       <tbody id="urTbody"></tbody>
@@ -1170,7 +1196,7 @@
               <select id="ur_trangThai">
                 <option value="">-- Không đổi --</option>
                 <option>Thử việc</option>
-                <option>Đang làm việc</option>
+                <option>Chính thức</option>
                 <option>Tạm nghỉ</option>
                 <option>Nghỉ việc</option>
               </select>
@@ -1216,24 +1242,50 @@
 </div>
 
 <!-- Update Request: duyệt (xem chi tiết thay đổi + nhập mật khẩu) -->
+<div class="overlay" id="urOmOverlay">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="urOmTitle">
+    <div class="modal-head">
+      <h2 id="urOmTitle">OM xác nhận</h2>
+      <button class="close-x" id="urOmClose" aria-label="Đóng">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;margin-bottom:10px;">Nhân viên: <b id="ur_omName"></b> (<span id="ur_omMaNV"></span>)</p>
+      <div id="ur_omDiff" style="font-size:13px;display:flex;flex-direction:column;gap:6px;margin-bottom:14px;"></div>
+      <div class="form-field" id="ur_omPassWrap">
+        <label for="ur_omPassword">Nhập mật khẩu OM <span class="req">*</span></label>
+        <input type="password" id="ur_omPassword" autocomplete="off">
+      </div>
+      <div class="form-field" id="ur_omReasonWrap" style="display:none;">
+        <label for="ur_omReason" id="ur_omReasonLabel">Lý do <span class="req">*</span></label>
+        <textarea id="ur_omReason" rows="3"></textarea>
+      </div>
+      <div class="err" id="e_ur_om"></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="urOmCancel">Đóng</button>
+      <button type="button" class="btn btn-primary" id="urOmConfirm">Xác nhận</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="urApproveOverlay">
   <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="urApproveTitle">
     <div class="modal-head">
-      <h2 id="urApproveTitle">Duyệt yêu cầu cập nhật</h2>
+      <h2 id="urApproveTitle">Ghi vào DB</h2>
       <button class="close-x" id="urApproveClose" aria-label="Đóng">✕</button>
     </div>
     <div class="modal-body">
       <p style="font-size:13px;margin-bottom:10px;">Nhân viên: <b id="ur_approveName"></b> (<span id="ur_approveMaNV"></span>)</p>
       <div id="ur_approveDiff" style="font-size:13px;display:flex;flex-direction:column;gap:6px;margin-bottom:14px;"></div>
       <div class="form-field">
-        <label for="ur_approvePassword">Nhập mật khẩu để duyệt <span class="req">*</span></label>
+        <label for="ur_approvePassword">Nhập mật khẩu để ghi vào DB <span class="req">*</span></label>
         <input type="password" id="ur_approvePassword" autocomplete="off">
         <div class="err" id="e_ur_approvePassword"></div>
       </div>
     </div>
     <div class="modal-foot">
       <button type="button" class="btn btn-ghost" id="urApproveCancel">Hủy</button>
-      <button type="button" class="btn btn-primary" id="urApproveConfirm">Duyệt yêu cầu</button>
+      <button type="button" class="btn btn-primary" id="urApproveConfirm">Ghi vào DB</button>
     </div>
   </div>
 </div>
@@ -1538,7 +1590,7 @@
               <label for="f_trangThai">Trạng thái <span class="req">*</span></label>
               <select id="f_trangThai" name="trangThai">
                 <option>Thử việc</option>
-                <option>Đang làm việc</option>
+                <option>Chính thức</option>
                 <option>Tạm nghỉ</option>
                 <option>Nghỉ việc</option>
               </select>
@@ -2190,6 +2242,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       APP_STATE_KEYS.forEach(function(k){
         state[k] = (map[k] !== undefined && map[k] !== null) ? map[k] : APP_STATE_DEFAULTS[k];
       });
+      // Đổi tên trạng thái cũ "Đang làm việc" -> "Chính thức" (hiển thị ngay; bản lưu trên máy chủ được admin cập nhật ở bước khởi động)
+      if(Array.isArray(state.employees)){
+        state.employees.forEach(function(e){ if(e && e.trangThai === 'Đang làm việc') e.trangThai = 'Chính thức'; });
+      }
     }catch(e){
       showToast("Không tải được dữ liệu từ máy chủ, kiểm tra kết nối mạng.", true);
       APP_STATE_KEYS.forEach(function(k){ state[k] = APP_STATE_DEFAULTS[k]; });
@@ -2407,7 +2463,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
   function statusBadgeClass(s){
     switch(s){
-      case "Đang làm việc": return "active";
+      case "Chính thức": case "Đang làm việc": return "active";
       case "Thử việc": return "probation";
       case "Tạm nghỉ": return "leave";
       case "Nghỉ việc": return "resigned";
@@ -3128,7 +3184,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         nganHang: strVal(rec.nganHang),
         diaChi: strVal(rec.diaChi),
         mucLuong: parseSalary(rec.mucLuong),
-        trangThai: strVal(rec.trangThai) || 'Đang làm việc',
+        trangThai: (function(v){ return (!v || v === 'Đang làm việc') ? 'Chính thức' : v; })(strVal(rec.trangThai)),
         _row: idx + 2
       });
     });
@@ -4057,30 +4113,88 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function renderUpdateRequestTable(){
     var tbody = document.getElementById('urTbody');
     var empty = document.getElementById('urEmptyState');
-    var list = (state.updateRequests || []).slice().sort(function(a,b){ return (b.requestedAt||'').localeCompare(a.requestedAt||''); });
+    var all = (state.updateRequests || []).slice().sort(function(a,b){ return (b.requestedAt||'').localeCompare(a.requestedAt||''); });
+    // Bộ lọc & tìm kiếm
+    var empByCode = {}; state.employees.forEach(function(e){ empByCode[e.maNV] = e; });
+    var userSet = {}, storeSet = {};
+    all.forEach(function(r){
+      if(r.requestedBy) userSet[r.requestedBy] = true;
+      var em = empByCode[r.maNV]; if(em && em.chiNhanh) storeSet[em.chiNhanh] = true;
+    });
+    fillSelect('urFilterUser', Object.keys(userSet).sort(), 'Tất cả người tạo');
+    fillSelect('urFilterStore', Object.keys(storeSet).sort(function(a,b){ return a.localeCompare(b,'vi'); }), 'Tất cả cửa hàng');
+    var fieldSel = document.getElementById('urFilterField');
+    if(fieldSel.options.length <= 1){
+      fieldSel.innerHTML = '<option value="">Tất cả nội dung thay đổi</option>' + Object.keys(UR_FIELD_LABELS).map(function(f){ return '<option value="'+f+'">'+escapeHtml(UR_FIELD_LABELS[f])+'</option>'; }).join('');
+    }
+    var q = document.getElementById('urSearchInput').value.trim().toLowerCase();
+    var fStatus = document.getElementById('urFilterStatus').value;
+    var fOm = document.getElementById('urFilterOm').value;
+    var fField = fieldSel.value;
+    var fStore = document.getElementById('urFilterStore').value;
+    var fUser = document.getElementById('urFilterUser').value;
+    var fFrom = document.getElementById('urFilterFrom').value;
+    var fTo = document.getElementById('urFilterTo').value;
+    function localDay(iso){ if(!iso) return ''; var d = new Date(iso); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+    var list = all.filter(function(r){
+      if(fStatus && r.status !== fStatus) return false;
+      if(fOm && (r.omStatus || 'none') !== fOm) return false;
+      if(fField && !(r.changes && r.changes[fField] !== undefined)) return false;
+      if(fUser && r.requestedBy !== fUser) return false;
+      if(fStore){ var em2 = empByCode[r.maNV]; if(!em2 || em2.chiNhanh !== fStore) return false; }
+      var day = localDay(r.requestedAt);
+      if(fFrom && (!day || day < fFrom)) return false;
+      if(fTo && (!day || day > fTo)) return false;
+      if(q){
+        var hay = [r.maNV, r.hoTen, r.requestedBy, r.reason, r.omReason, r.cancelReason].join(' ').toLowerCase();
+        if(hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+    document.getElementById('urCount').textContent = 'Hiển thị ' + list.length + ' / ' + all.length + ' yêu cầu';
     if(list.length === 0){
       tbody.innerHTML = '';
       empty.style.display = 'flex';
+      empty.querySelector('h3').textContent = all.length ? 'Không có yêu cầu nào khớp bộ lọc' : 'Chưa có yêu cầu cập nhật nào';
       return;
     }
     empty.style.display = 'none';
     var STATUS_TAG = { 'Chờ duyệt':'tag-2', 'Đã duyệt':'tag-0', 'Từ chối':'tag-3' };
+    var STATUS_LABEL = { 'Chờ duyệt':'Chờ xử lý', 'Đã duyệt':'Đã ghi DB', 'Từ chối':'Đã hủy' };
     tbody.innerHTML = list.map(function(r){
       var summary = Object.keys(r.changes).map(function(f){
         return '<div>'+escapeHtml(UR_FIELD_LABELS[f])+': '+escapeHtml(urFieldDisplay(f, r.oldValues[f]))+' → <b>'+escapeHtml(urFieldDisplay(f, r.changes[f]))+'</b></div>';
       }).join('');
       var dateLabel = r.requestedAt ? new Date(r.requestedAt).toLocaleString('vi-VN') : '';
+      var omOk = r.omStatus === 'confirmed';
+      var omRej = r.omStatus === 'rejected';
+      var idAttr = 'data-id="'+escapeHtml(r.id)+'"';
       var actionsHtml = r.status === 'Chờ duyệt'
-        ? '<button type="button" class="btn btn-primary btn-sm ur-approve-btn" data-id="'+escapeHtml(r.id)+'">Duyệt</button> ' +
-          '<button type="button" class="btn btn-ghost btn-sm ur-reject-btn" data-id="'+escapeHtml(r.id)+'">Từ chối</button>'
-        : (r.approvedBy ? escapeHtml((r.status === 'Đã duyệt' ? 'Duyệt bởi: ' : 'Xử lý bởi: ') + r.approvedBy) : '');
+        ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">' +
+            '<button type="button" class="btn btn-sm ur-om-confirm-btn" '+idAttr+' style="'+(omOk?'background:var(--brand-soft);color:var(--brand-dark);border:1px solid var(--brand);':'background:var(--gold);color:#fff;border:none;')+'">'+(omOk?'✓ OM đã xác nhận':'OM xác nhận')+'</button>' +
+            (omRej ? '' : '<button type="button" class="btn btn-ghost btn-sm ur-om-reject-btn" '+idAttr+'>OM từ chối</button>') +
+          '</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+            '<button type="button" class="btn btn-primary btn-sm ur-approve-btn" '+idAttr+(omOk?'':' disabled title="Cần OM xác nhận trước"')+'>Ghi vào DB</button>' +
+            '<button type="button" class="btn btn-ghost btn-sm ur-reject-btn" '+idAttr+'>Hủy</button>' +
+          '</div>'
+        : (r.approvedBy ? escapeHtml((r.status === 'Đã duyệt' ? 'Ghi bởi: ' : 'Hủy bởi: ') + r.approvedBy) : '');
+      var omTag = omOk ? '<div style="font-size:11px;color:var(--brand-dark);margin-top:4px;">OM đã xác nhận</div>'
+        : (omRej ? '<div style="font-size:11px;color:#c0392b;margin-top:4px;">OM từ chối</div>' : (r.status === 'Chờ duyệt' ? '<div style="font-size:11px;color:var(--ink-faint);margin-top:4px;">Chờ OM</div>' : ''));
+      var fmtT = function(iso){ return iso ? new Date(iso).toLocaleString('vi-VN') : ''; };
+      var noteParts = [];
+      if(omOk) noteParts.push('OM xác nhận: ' + escapeHtml(r.omBy||'') + (r.omAt ? ' · ' + escapeHtml(fmtT(r.omAt)) : ''));
+      if(omRej) noteParts.push('<span style="color:#c0392b;">OM từ chối ('+escapeHtml(r.omBy||'')+'): '+escapeHtml(r.omReason||'')+'</span>');
+      if(r.status === 'Từ chối' && r.cancelReason) noteParts.push('Lý do hủy: '+escapeHtml(r.cancelReason));
+      var noteHtml = noteParts.map(function(t){ return '<div>'+t+'</div>'; }).join('');
       return '<tr>' +
         '<td class="col-code">'+escapeHtml(r.maNV)+'</td>' +
         '<td>'+escapeHtml(r.hoTen||'')+'</td>' +
         '<td style="font-size:12.5px;">'+summary+(r.reason ? '<div style="color:var(--ink-faint);margin-top:4px;">Lý do: '+escapeHtml(r.reason)+'</div>' : '')+'</td>' +
         '<td>'+escapeHtml(r.requestedBy||'')+'</td>' +
         '<td style="font-size:12.5px;">'+escapeHtml(dateLabel)+'</td>' +
-        '<td><span class="tag '+(STATUS_TAG[r.status]||'tag-1')+'">'+escapeHtml(r.status)+'</span></td>' +
+        '<td><span class="tag '+(STATUS_TAG[r.status]||'tag-1')+'">'+escapeHtml(STATUS_LABEL[r.status]||r.status)+'</span>'+omTag+'</td>' +
+        '<td style="font-size:12px;">'+noteHtml+'</td>' +
         '<td>'+actionsHtml+'</td>' +
       '</tr>';
     }).join('');
@@ -4089,8 +4203,82 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   document.getElementById('urTbody').addEventListener('click', function(ev){
     var approveBtn = ev.target.closest('.ur-approve-btn');
     var rejectBtn = ev.target.closest('.ur-reject-btn');
-    if(approveBtn){ openApproveModal(approveBtn.dataset.id); return; }
-    if(rejectBtn){ rejectUpdateRequest(rejectBtn.dataset.id); return; }
+    var omConfirmBtn = ev.target.closest('.ur-om-confirm-btn');
+    var omRejectBtn = ev.target.closest('.ur-om-reject-btn');
+    if(omConfirmBtn){ openOmModal(omConfirmBtn.dataset.id, 'confirm'); return; }
+    if(omRejectBtn){ openOmModal(omRejectBtn.dataset.id, 'reject'); return; }
+    if(approveBtn){ if(approveBtn.disabled) return; openApproveModal(approveBtn.dataset.id); return; }
+    if(rejectBtn){ openOmModal(rejectBtn.dataset.id, 'cancel'); return; }
+  });
+
+  var urSearchTimer;
+  document.getElementById('urSearchInput').addEventListener('input', function(){
+    clearTimeout(urSearchTimer);
+    urSearchTimer = setTimeout(renderUpdateRequestTable, 150);
+  });
+  ['urFilterStatus','urFilterOm','urFilterField','urFilterStore','urFilterUser','urFilterFrom','urFilterTo'].forEach(function(id){
+    document.getElementById(id).addEventListener('change', renderUpdateRequestTable);
+  });
+  document.getElementById('urFilterClear').addEventListener('click', function(){
+    document.getElementById('urSearchInput').value = '';
+    ['urFilterStatus','urFilterOm','urFilterField','urFilterStore','urFilterUser','urFilterFrom','urFilterTo'].forEach(function(id){ document.getElementById(id).value = ''; });
+    renderUpdateRequestTable();
+  });
+
+  /* OM xác nhận (mật khẩu 1111) / OM từ chối (nhập lý do) / Hủy yêu cầu (nhập lý do) */
+  var UR_OM_PASSWORD = '1111';
+  var urOmOverlay = document.getElementById('urOmOverlay');
+  var urOmId = null, urOmMode = null;
+  function openOmModal(id, mode){
+    var req = (state.updateRequests || []).find(function(r){ return r.id === id; });
+    if(!req) return;
+    urOmId = id; urOmMode = mode;
+    document.getElementById('urOmTitle').textContent = mode === 'confirm' ? 'OM xác nhận' : (mode === 'reject' ? 'OM từ chối' : 'Hủy yêu cầu');
+    document.getElementById('ur_omName').textContent = req.hoTen || '';
+    document.getElementById('ur_omMaNV').textContent = req.maNV;
+    document.getElementById('ur_omDiff').innerHTML = Object.keys(req.changes).map(function(f){
+      return '<div>'+escapeHtml(UR_FIELD_LABELS[f])+': '+escapeHtml(urFieldDisplay(f, req.oldValues[f]))+' → <b>'+escapeHtml(urFieldDisplay(f, req.changes[f]))+'</b></div>';
+    }).join('');
+    document.getElementById('ur_omPassWrap').style.display = mode === 'confirm' ? '' : 'none';
+    document.getElementById('ur_omReasonWrap').style.display = mode === 'confirm' ? 'none' : '';
+    document.getElementById('ur_omPassword').value = '';
+    document.getElementById('ur_omReason').value = '';
+    document.getElementById('e_ur_om').textContent = '';
+    document.getElementById('urOmConfirm').textContent = mode === 'confirm' ? 'OM xác nhận' : (mode === 'reject' ? 'OM từ chối' : 'Hủy yêu cầu');
+    urOmOverlay.classList.add('show');
+    setTimeout(function(){ document.getElementById(mode === 'confirm' ? 'ur_omPassword' : 'ur_omReason').focus(); }, 60);
+  }
+  function closeOmModal(){ urOmOverlay.classList.remove('show'); urOmId = null; urOmMode = null; }
+  document.getElementById('urOmClose').addEventListener('click', closeOmModal);
+  document.getElementById('urOmCancel').addEventListener('click', closeOmModal);
+  urOmOverlay.addEventListener('click', function(ev){ if(ev.target === urOmOverlay) closeOmModal(); });
+  document.getElementById('urOmConfirm').addEventListener('click', async function(){
+    if(!urOmId) return;
+    var id = urOmId, mode = urOmMode;
+    var errEl = document.getElementById('e_ur_om');
+    var reason = document.getElementById('ur_omReason').value.trim();
+    if(mode === 'confirm'){
+      if(document.getElementById('ur_omPassword').value !== UR_OM_PASSWORD){ errEl.textContent = 'Sai mật khẩu OM, vui lòng thử lại.'; return; }
+    } else if(!reason){
+      errEl.textContent = 'Vui lòng nhập lý do.'; return;
+    }
+    var btn = document.getElementById('urOmConfirm');
+    btn.disabled = true;
+    var ok = await mutateStateKeySafe('updateRequests', function(fresh){
+      var idx = fresh.findIndex(function(x){ return x.id === id; });
+      if(idx === -1) return false;
+      var r = fresh[idx];
+      if(r.status !== 'Chờ duyệt'){ errEl.textContent = 'Yêu cầu này đã được xử lý trước đó.'; return false; }
+      var now = new Date().toISOString(), who = window.CURRENT_USERNAME || '';
+      if(mode === 'confirm'){ r.omStatus = 'confirmed'; r.omBy = who; r.omAt = now; r.omReason = ''; }
+      else if(mode === 'reject'){ r.omStatus = 'rejected'; r.omBy = who; r.omAt = now; r.omReason = reason; }
+      else { r.status = 'Từ chối'; r.approvedBy = who; r.approvedAt = now; r.cancelReason = reason; }
+    });
+    btn.disabled = false;
+    if(!ok) return;
+    renderUpdateRequestTable();
+    showToast(mode === 'confirm' ? 'OM đã xác nhận.' : (mode === 'reject' ? 'OM đã từ chối.' : 'Đã hủy yêu cầu.'));
+    closeOmModal();
   });
 
   function openApproveModal(id){
@@ -4122,6 +4310,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var reqId = urApprovingId;
     var req = (state.updateRequests || []).find(function(r){ return r.id === reqId; });
     if(!req) return;
+    if(req.omStatus !== 'confirmed'){
+      document.getElementById('e_ur_approvePassword').textContent = 'Cần OM xác nhận trước khi ghi vào DB.';
+      return;
+    }
 
     var applyOk = await saveEmployeesMutation(function(fresh){
       var idx = fresh.findIndex(function(x){ return x.id === req.employeeId; });
@@ -4145,7 +4337,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     renderAll();
     renderUpdateRequestTable();
-    showToast('Đã duyệt và áp dụng thay đổi cho nhân viên.');
+    showToast('Đã ghi vào DB và áp dụng thay đổi cho nhân viên.');
     closeApproveModal();
   });
 
@@ -7480,6 +7672,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     renderAll();
     startRealtimeSync();
     if((window.CURRENT_USERNAME || '').toLowerCase() === 'admin'){
+      // Cập nhật 1 lần trên máy chủ: "Đang làm việc" -> "Chính thức" (chỉ đổi đúng trường trạng thái, không đụng dữ liệu khác)
+      try{
+        var res = await window.supabaseClient.from('app_state').select('data').eq('key','employees').maybeSingle();
+        var srvList = res && res.data && Array.isArray(res.data.data) ? res.data.data : [];
+        if(srvList.some(function(e){ return e && e.trangThai === 'Đang làm việc'; })){
+          await saveEmployeesMutation(function(fresh){
+            fresh.forEach(function(e){ if(e && e.trangThai === 'Đang làm việc') e.trangThai = 'Chính thức'; });
+          });
+        }
+      }catch(e){ console.warn('migrate trangThai', e); }
       pruneOldScheduleData();
     }
   }, { once: true });
