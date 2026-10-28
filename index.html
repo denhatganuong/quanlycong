@@ -1140,6 +1140,7 @@
         <tr>
           <th style="width:110px;">Mã NV</th>
           <th style="width:160px;">Tên nhân viên</th>
+          <th style="width:170px;">Cửa hàng trực thuộc</th>
           <th>Nội dung thay đổi</th>
           <th style="width:130px;">Người tạo</th>
           <th style="width:150px;">Ngày tạo</th>
@@ -4190,6 +4191,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return '<tr>' +
         '<td class="col-code">'+escapeHtml(r.maNV)+'</td>' +
         '<td>'+escapeHtml(r.hoTen||'')+'</td>' +
+        '<td style="font-size:12.5px;">'+(function(){ var em3 = empByCode[r.maNV]; return em3 && em3.chiNhanh ? '<span class="tag tag-'+hashIndex(em3.chiNhanh)+'">'+escapeHtml(em3.chiNhanh)+'</span>' : '—'; })()+'</td>' +
         '<td style="font-size:12.5px;">'+summary+(r.reason ? '<div style="color:var(--ink-faint);margin-top:4px;">Lý do: '+escapeHtml(r.reason)+'</div>' : '')+'</td>' +
         '<td>'+escapeHtml(r.requestedBy||'')+'</td>' +
         '<td style="font-size:12.5px;">'+escapeHtml(dateLabel)+'</td>' +
@@ -6307,8 +6309,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
                 (shift ? '<span class="t">'+escapeHtml(shift.batDau)+'-'+escapeHtml(shift.ketThuc)+'</span>' : '') +
               '</div>';
           }).join('');
+          var clash = false;
+          thisStoreShifts.forEach(function(a){ allShifts.forEach(function(b){ if(b.store && b.store !== viewStore && shiftsOverlap(a.code, b.code)) clash = true; }); });
           var otherNote = otherStoreNames.length
-            ? '<div style="font-size:9.5px;color:var(--gold-dark);background:var(--gold-soft);border-radius:4px;padding:1px 4px;margin-top:2px;" title="Hôm nay còn làm ở '+escapeHtml(otherStoreNames.join(', '))+'">+ '+escapeHtml(otherStoreNames.join(', '))+'</div>'
+            ? '<div style="font-size:9.5px;'+(clash ? 'color:#b42318;background:#fde2e0;font-weight:700;' : 'color:var(--gold-dark);background:var(--gold-soft);')+'border-radius:4px;padding:1px 4px;margin-top:2px;" title="'+(clash ? 'TRÙNG GIỜ với ca ở cửa hàng khác — cần chỉnh lại. ' : '')+'Hôm nay còn làm ở '+escapeHtml(otherStoreNames.join(', '))+'">'+(clash ? '⚠ Trùng giờ · ' : '')+'+ '+escapeHtml(otherStoreNames.join(', '))+'</div>'
             : '';
           rowHtml += '<td class="sched-cell">' +
             '<div class="sched-cell-stack" data-manv="'+escapeHtml(e.maNV)+'" data-date="'+d+'">' + badgesHtml + otherNote + '</div>' +
@@ -6718,6 +6722,35 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   });
   // Cập nhật đúng phần CỦA 1 CỬA HÀNG trong ngày — giữ nguyên ca của (các) cửa hàng khác nếu nhân viên
   // làm nhiều nơi trong cùng 1 ngày (vd sáng CH A, chiều CH B). newShiftObjs=null nghĩa là đánh dấu nghỉ.
+  /* Kiểm tra trùng giờ giữa các cửa hàng: 1 người không thể làm 2 cửa hàng cùng 1 khung giờ trong ngày. */
+  function shiftMinutesRange(code){
+    var sh = getShiftByCode(code);
+    if(!sh || !sh.batDau || !sh.ketThuc) return null;
+    function toMin(t){ var m = String(t).match(/(\d{1,2})\s*[:hH]\s*(\d{2})?/); return m ? Number(m[1])*60 + Number(m[2]||0) : null; }
+    var a = toMin(sh.batDau), b = toMin(sh.ketThuc);
+    if(a === null || b === null) return null;
+    if(b <= a) b += 1440;
+    return [a, b];
+  }
+  function shiftsOverlap(codeA, codeB){
+    var ra = shiftMinutesRange(codeA), rb = shiftMinutesRange(codeB);
+    if(!ra || !rb) return false;
+    return ra[0] < rb[1] && rb[0] < ra[1];
+  }
+  // Trả về {store, codeNew, codeOther} nếu ca mới của cửa hàng này trùng giờ với ca đã xếp ở cửa hàng khác trong cùng ngày.
+  function findCrossStoreConflict(entry, storeForEntry, newObjs){
+    if(!entry || entry.off || !Array.isArray(entry.shifts)) return null;
+    var others = entry.shifts.map(function(s){
+      var o = typeof s === 'string' ? { code: s } : s;
+      return { code: o.code, store: o.store || entry.store || null };
+    }).filter(function(o){ return o.store && o.store !== storeForEntry; });
+    for(var i=0;i<(newObjs||[]).length;i++){
+      for(var j=0;j<others.length;j++){
+        if(shiftsOverlap(newObjs[i].code, others[j].code)) return { store: others[j].store, codeNew: newObjs[i].code, codeOther: others[j].code };
+      }
+    }
+    return null;
+  }
   function applyStoreShiftsForDay(fresh, key, storeForEntry, newShiftObjs){
     var existing = fresh[key];
     var otherStoreShifts = [];
@@ -6779,10 +6812,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var prev = prevObjs.find(function(o){ return o.code === code; });
       return { code: code, task: prev ? prev.task : '' };
     });
-    await saveScheduleMutation(function(fresh){ applyStoreShiftsForDay(fresh, key, storeForEntry, pickedObjs); });
+    var conflictMsg = '';
+    var okSave = await saveScheduleMutation(function(fresh){
+      var cf = findCrossStoreConflict(fresh[key], storeForEntry, pickedObjs);
+      if(cf){
+        conflictMsg = 'Ca ' + cf.codeNew + ' trùng giờ với ca ' + cf.codeOther + ' mà nhân viên đã được xếp ở ' + cf.store + ' trong ngày này. Vui lòng xếp ca khác giờ hoặc nhờ cửa hàng kia chỉnh lại.';
+        return false;
+      }
+      applyStoreShiftsForDay(fresh, key, storeForEntry, pickedObjs);
+    });
     saveBtn.disabled = false;
     saveBtn.textContent = 'Lưu';
     if(cancelBtn) cancelBtn.disabled = false;
+    if(conflictMsg){ showToast(conflictMsg, true); return; }
+    if(!okSave) return;
     showToast('Đã lưu lịch làm việc.');
     closeScheduleCellModal();
   });
