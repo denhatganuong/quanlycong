@@ -6191,8 +6191,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var hasHere = getScheduleShiftObjects(code, date).some(function(o){ return o.store === storeName; });
       if(hasHere) maNVs.push(code);
     });
+    var mgrTitle = normalizeHeader(STORE_MANAGER_TITLE);
     return maNVs.map(function(maNV){ return state.employees.find(function(e){ return e.maNV === maNV; }); })
       .filter(Boolean)
+      .filter(function(e){ return normalizeHeader(e.chucDanh || '') !== mgrTitle; }) // Quản lý cửa hàng không hiển thị trong xếp lịch nhân viên
       .map(function(e){ return Object.assign({}, e, { _borrowed: true, _borrowedFrom: e.chiNhanh }); });
   }
   async function borrowStaff(maNV, storeName, weekStart){
