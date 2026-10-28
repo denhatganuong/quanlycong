@@ -6175,7 +6175,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return !!(state.scheduleLocks[getBorrowKey(storeName, weekStart)]);
   }
   function getBorrowedStaffList(storeName, weekStart){
-    var maNVs = state.borrowedStaff[getBorrowKey(storeName, weekStart)] || [];
+    var maNVs = (state.borrowedStaff[getBorrowKey(storeName, weekStart)] || []).slice();
+    // Tự thêm cả những nhân viên (ở cửa hàng khác) ĐÃ CÓ ca ghi nhận tại cửa hàng này trong tuần,
+    // để lịch cửa hàng luôn hiện đủ ca của họ dù danh sách "mượn" thiếu.
+    var wEnd = addDaysISO(weekStart, 6);
+    var homeOf = {}; state.employees.forEach(function(e){ homeOf[e.maNV] = e.chiNhanh; });
+    Object.keys(state.schedule).forEach(function(k){
+      var parts = k.split('|'), date = parts[1], code = parts[0];
+      if(!date || date < weekStart || date > wEnd) return;
+      if(maNVs.indexOf(code) !== -1 || homeOf[code] === undefined || homeOf[code] === storeName) return;
+      var entry = state.schedule[k];
+      if(!entry || entry.off) return;
+      var hasHere = getScheduleShiftObjects(code, date).some(function(o){ return o.store === storeName; });
+      if(hasHere) maNVs.push(code);
+    });
     return maNVs.map(function(maNV){ return state.employees.find(function(e){ return e.maNV === maNV; }); })
       .filter(Boolean)
       .map(function(e){ return Object.assign({}, e, { _borrowed: true, _borrowedFrom: e.chiNhanh }); });
