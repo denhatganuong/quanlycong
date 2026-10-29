@@ -3400,7 +3400,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       for(var d = 0; d < 7; d++){
         var dt = new Date(gridStart);
         dt.setDate(gridStart.getDate() + w * 7 + d);
-        weekDates.push(dt.toISOString().slice(0,10));
+        weekDates.push(dateToISO(dt));
       }
       weeks.push(weekDates);
       if(w >= 3 && new Date(weekDates[6] + 'T00:00:00') >= new Date(year, month, 0)) break;
