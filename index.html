@@ -3097,6 +3097,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     'cmnd cccd':'cmndCccd','cmnd':'cmndCccd','cccd':'cmndCccd','cmnd/cccd':'cmndCccd',
     'stk':'stk','so tai khoan':'stk',
     'ngan hang':'nganHang',
+    'thanh toan':'thanhToan','hinh thuc thanh toan':'thanhToan','hinh thuc tt':'thanhToan',
     'dia chi':'diaChi',
     'muc luong':'mucLuong','luong':'mucLuong',
     'trang thai':'trangThai'
@@ -3183,6 +3184,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         cmndCccd: strVal(rec.cmndCccd),
         stk: strVal(rec.stk),
         nganHang: strVal(rec.nganHang),
+        thanhToan: (function(v){
+          var n = removeDiacritics(String(v||'')).toLowerCase().replace(/[^a-z]+/g,' ').trim();
+          if(!n) return '';
+          if(n === 'chuyen khoan' || n === 'ck' || n === 'bank' || n === 'chuyen khoan ngan hang') return 'Chuyển khoản';
+          if(n === 'tien mat' || n === 'tm' || n === 'cash') return 'Tiền mặt';
+          return String(v).trim(); // giá trị lạ: giữ nguyên để báo lỗi rõ ở bước kiểm tra
+        })(strVal(rec.thanhToan)),
         diaChi: strVal(rec.diaChi),
         mucLuong: parseSalary(rec.mucLuong),
         trangThai: (function(v){ return (!v || v === 'Đang làm việc') ? 'Chính thức' : v; })(strVal(rec.trangThai)),
@@ -3218,6 +3226,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(seenMaNV[maKey]) errors.push({row:r._row, message:'Mã NV "'+r.maNV+'" bị trùng với dòng '+seenMaNV[maKey]+' trong cùng file.'});
       else seenMaNV[maKey] = r._row;
 
+      if(r.thanhToan && r.thanhToan !== 'Chuyển khoản' && r.thanhToan !== 'Tiền mặt'){
+        errors.push({row:r._row, message:'Hình thức thanh toán "'+r.thanhToan+'" không hợp lệ — chỉ nhận "Chuyển khoản" hoặc "Tiền mặt".'});
+      }
       if(!existingByMaNV[maKey]){
         var missing = Object.keys(REQUIRED_FIELD_LABELS).filter(function(k){ return !r[k] || !String(r[k]).trim(); });
         if(!r.hoTen || !String(r.hoTen).trim()) missing.unshift('hoTen');
@@ -3278,6 +3289,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           nganHang:r.nganHang, diaChi:r.diaChi, mucLuong:r.mucLuong, trangThai:r.trangThai,
           capNhatLuc: now
         };
+        if(r.thanhToan) payload.thanhToan = r.thanhToan; // cột trống thì giữ nguyên giá trị đang có
         if(byMaNV[key]){
           Object.assign(byMaNV[key], payload);
           updated++;
