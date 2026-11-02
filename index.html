@@ -211,6 +211,9 @@
   }
   .sched-day-copy-btn:hover{background:var(--brand-soft);color:var(--brand-dark);}
   .sched-table.locked .sched-day-copy-btn{pointer-events:none;opacity:.4;}
+  .sched-tn-select{display:block;width:100%;min-width:92px;max-width:130px;margin:4px auto 0;font-size:10.5px;padding:3px 2px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--ink);font-family:inherit;}
+  .sched-tn-select.filled{background:var(--brand-soft);color:var(--brand-dark);font-weight:650;border-color:var(--brand);}
+  .sched-table.locked .sched-tn-select{pointer-events:none;opacity:.55;}
   .sched-table tbody td{
     border-bottom:1px solid var(--border);padding:8px;vertical-align:middle;
   }
@@ -805,7 +808,7 @@
       </div>
     </div>
 
-    <div class="config-section">
+    <div class="config-section" style="display:none;">
       <div class="config-section-head">
         <div>
           <h2>Công việc theo màu</h2>
@@ -1024,7 +1027,7 @@
             </div>
           </div>
 
-          <div class="table-card" id="timelineCard" style="margin-top:18px;">
+          <div class="table-card" id="timelineCard" style="margin-top:18px;display:none;">
             <div class="config-section-head" style="padding:14px 16px 0;margin-bottom:4px;">
               <div>
                 <h2 style="font-size:13.5px;">Phân công công việc theo màu</h2>
@@ -2203,6 +2206,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     tkDeletingId: null,
     scheduleLocks: {},
     scheduleLockLog: {},
+    cashierAssign: {},
     holidayMultipliers: {},
     tcMonth: 0,
     tcYear: 0,
@@ -2226,11 +2230,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var SALARY_FIELDS = ["luongCB","chuyenCan","dienThoai","xangXe","hoTroKiemNhiem","kpiKhac"];
 
   /* ---------- Persistence (đổi sang Supabase — dữ liệu dùng chung qua internet) ---------- */
-  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','scheduleLockLog','holidayMultipliers','userPermissions','updateRequests','advanceRequests'];
+  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','scheduleLockLog','cashierAssign','holidayMultipliers','userPermissions','updateRequests','advanceRequests'];
   var APP_STATE_DEFAULTS = {
     employees: [], jobTitles: [], shifts: [], salaryAllocations: {}, stores: [],
     schedule: {}, borrowedStaff: {}, employeeScheduleStatus: {}, tasks: [],
-    scheduleLocks: {}, scheduleLockLog: {}, holidayMultipliers: {}, userPermissions: {}, updateRequests: [], advanceRequests: []
+    scheduleLocks: {}, scheduleLockLog: {}, cashierAssign: {}, holidayMultipliers: {}, userPermissions: {}, updateRequests: [], advanceRequests: []
   };
   var lastKnownUpdatedAt = {};
 
@@ -6121,7 +6125,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
     });
   }
+  function hasScheduleInWeek(maNV, weekStart){
+    for(var i=0;i<7;i++){
+      var en = state.schedule[maNV + '|' + addDaysISO(weekStart, i)];
+      if(en && (en.off || (en.shifts && en.shifts.length))) return true;
+    }
+    return false;
+  }
   function isHiddenForWeek(maNV, weekStart){
+    // Nhân viên có trạng thái hồ sơ "Nghỉ việc" không hiện trong xếp lịch
+    // (trừ tuần cũ đã có ca/OFF ghi nhận, để giữ nguyên lịch sử).
+    var emp = state.employees.find(function(x){ return x.maNV === maNV; });
+    if(emp && emp.trangThai === 'Nghỉ việc' && !hasScheduleInWeek(maNV, weekStart)) return true;
     var rec = getEmployeeScheduleStatus(maNV);
     if(!rec) return false;
     return weekStart > rec.effectiveWeek;
@@ -6241,7 +6256,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return;
     }
     list.innerHTML = sorted.map(function(s){
-      var count = getStoreEmployees(s.tenCuaHang).length;
+      var count = getStoreEmployees(s.tenCuaHang).filter(function(e){ return !isHiddenForWeek(e.maNV, state.scheduleWeekStart || getWeekStartISO(todayISO())); }).length;
       var active = s.tenCuaHang === state.scheduleSelectedStore;
       var unlockedPrevWeek = !isWeekLocked(s.tenCuaHang, prevWeekStart);
       var warnDot = unlockedPrevWeek ? '<span class="store-warn-dot"></span>' : '';
@@ -6265,11 +6280,31 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   });
 
   /* ---------- Schedule: main grid ---------- */
-  function buildScheduleHeadHtml(weekDates, firstColLabel){
+  // Thu ngân ca 1 / ca 2 của cửa hàng theo ngày: state.cashierAssign[store|date] = { ca1: maNV, ca2: maNV }
+  function cashierKey(store, date){ return store + '|' + date; }
+  function buildCashierSelectHtml(store, date, slot, label, roster){
+    var cur = (state.cashierAssign[cashierKey(store, date)] || {})[slot] || '';
+    var dayStaff = roster.filter(function(e){
+      return getScheduleShiftObjects(e.maNV, date).some(function(o){ return o.store === store; }) && !isOffDay(e.maNV, date);
+    });
+    var opts = '<option value="">'+label+'</option>';
+    var found = false;
+    dayStaff.forEach(function(e){
+      if(e.maNV === cur) found = true;
+      opts += '<option value="'+escapeHtml(e.maNV)+'"'+(e.maNV===cur?' selected':'')+'>'+escapeHtml(e.hoTen||e.maNV)+(e._borrowed?' (mượn)':'')+'</option>';
+    });
+    if(cur && !found){
+      var ce = state.employees.find(function(x){ return x.maNV === cur; });
+      opts += '<option value="'+escapeHtml(cur)+'" selected>'+escapeHtml(ce ? ce.hoTen : cur)+' (không còn ca)</option>';
+    }
+    return '<select class="sched-tn-select'+(cur?' filled':'')+'" data-date="'+date+'" data-slot="'+slot+'" title="'+label+'">'+opts+'</select>';
+  }
+  function buildScheduleHeadHtml(weekDates, firstColLabel, store, roster){
     var headHtml = '<th class="sched-emp-head">'+firstColLabel+'</th>';
     weekDates.forEach(function(d, idx){
       headHtml += '<th class="sched-day"><span class="dow">'+WEEKDAY_LABELS[idx]+'</span><span class="date">'+formatDDMM(d)+'</span>' +
         '<button type="button" class="sched-day-copy-btn" data-date="'+d+'" title="Sao chép lịch ngày này sang ngày khác">⧉</button>' +
+        (store ? buildCashierSelectHtml(store, d, 'ca1', 'Thu ngân ca 1', roster || []) + buildCashierSelectHtml(store, d, 'ca2', 'Thu ngân ca 2', roster || []) : '') +
       '</th>';
     });
     headHtml += '<th class="sched-total-head">TỔNG GIỜ/TUẦN</th>';
@@ -6386,7 +6421,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var allEmployees = ownStaff.concat(borrowed)
       .sort(function(a,b){ return (a.hoTen||'').localeCompare(b.hoTen||'', 'vi'); });
 
-    document.getElementById('scheduleStaffHeadRow').innerHTML = buildScheduleHeadHtml(weekDates, 'NHÂN VIÊN');
+    document.getElementById('scheduleStaffHeadRow').innerHTML = buildScheduleHeadHtml(weekDates, 'NHÂN VIÊN', state.scheduleSelectedStore, allEmployees);
 
     var staffTbody = document.getElementById('scheduleStaffTbody');
     var staffEmpty = document.getElementById('scheduleEmptyEmployees');
@@ -6458,6 +6493,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   function renderTimelineBody(weekDates){
+    return; // Phần "Phân công công việc theo màu" đã được gỡ khỏi giao diện — không cần dựng nữa
     var body = document.getElementById('timelineBody');
     var empty = document.getElementById('timelineEmpty');
     if(!state.scheduleSelectedStore){
@@ -7028,6 +7064,26 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     showToast('Đã xuất file Excel.');
   });
 
+  /* ---------- Schedule: khai báo Thu ngân ca 1 / ca 2 theo ngày ---------- */
+  document.getElementById('scheduleStaffHeadRow').addEventListener('change', async function(ev){
+    var sel = ev.target.closest('.sched-tn-select');
+    if(!sel || !state.scheduleSelectedStore) return;
+    if(isWeekLocked(state.scheduleSelectedStore, state.scheduleWeekStart)){
+      showToast('Tuần này đã chốt công, không thể chỉnh sửa.', true);
+      renderScheduleMain();
+      return;
+    }
+    var store = state.scheduleSelectedStore, date = sel.dataset.date, slot = sel.dataset.slot, val = sel.value;
+    sel.disabled = true;
+    await mutateStateKeySafe('cashierAssign', function(fresh){
+      var k = cashierKey(store, date);
+      var rec = fresh[k] || {};
+      if(val) rec[slot] = val; else delete rec[slot];
+      if(!rec.ca1 && !rec.ca2) delete fresh[k]; else fresh[k] = rec;
+    });
+    renderScheduleMain();
+  });
+
   /* ---------- Schedule: copy 1 day to other days ---------- */
   var copyDayOverlay = document.getElementById('copyDayOverlay');
   var copyDaySourceDate = null;
@@ -7351,45 +7407,35 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(state.tcFilterStore && n !== state.tcFilterStore) return false;
       return true;
     }).sort(function(a,b){ return a.localeCompare(b,'vi'); });
-    var nameSet = {}; storeNames.forEach(function(n){ nameSet[n] = true; });
-    var per = {}; // store -> maNV -> [days]
-    var storeDay = {}; // store -> [count per day]
-    var prefix = year + '-' + pad2(month) + '-';
     var empByCode = {}; state.employees.forEach(function(e){ empByCode[e.maNV] = e; });
-    Object.keys(state.schedule).forEach(function(k){
-      var parts = k.split('|'), maNV = parts[0], date = parts[1];
-      if(!date || date.indexOf(prefix) !== 0 || !empByCode[maNV]) return;
-      var entry = state.schedule[k];
-      if(!entry || entry.off) return;
-      var day = Number(date.slice(8,10));
-      getScheduleShiftObjects(maNV, date).forEach(function(o){
-        if(!o.store || !nameSet[o.store] || !isCashierTask(o.task)) return;
-        per[o.store] = per[o.store] || {}; storeDay[o.store] = storeDay[o.store] || [];
-        var arr = per[o.store][maNV] = per[o.store][maNV] || [];
-        arr[day] = (arr[day] || 0) + 1;
-        storeDay[o.store][day] = (storeDay[o.store][day] || 0) + 1;
-      });
-    });
     var q = (state.tcSearch || '').trim().toLowerCase();
     var std = numDays * 2;
     return storeNames.map(function(sn){
-      var people = per[sn] || {};
-      var days = storeDay[sn] || [];
+      var per = {};
+      var dayCount = [];
+      for(var d=1; d<=numDays; d++){
+        var rec = state.cashierAssign[cashierKey(sn, tcDateISO(year, month, d))];
+        if(!rec) continue;
+        var slots = [rec.ca1, rec.ca2].filter(function(x){ return x && empByCode[x]; });
+        if(slots.length === 0) continue;
+        dayCount[d] = slots.length;
+        if(slots.length === 1) slots = [slots[0], slots[0]]; // chỉ có 1 người đứng thu ngân trong ngày -> tính 2 ca
+        slots.forEach(function(m){
+          per[m] = per[m] || [];
+          per[m][d] = (per[m][d] || 0) + 1;
+        });
+      }
       var total = 0;
-      var rows = Object.keys(people).map(function(maNV){
-        var arr = people[maNV], dayVals = [], sum = 0;
-        for(var d=1; d<=numDays; d++){
-          var v = arr[d] || 0;
-          if(v > 0 && days[d] === 1) v = 2; // chỉ 1 ca thu ngân trong ngày -> tính 2 ca
-          dayVals[d] = v; sum += v;
-        }
+      var rows = Object.keys(per).map(function(maNV){
+        var dayVals = [], sum = 0;
+        for(var d=1; d<=numDays; d++){ var v = per[maNV][d] || 0; dayVals[d] = v; sum += v; }
         total += sum;
         return { e: empByCode[maNV], days: dayVals, total: sum };
       }).sort(function(a,b){ return (a.e.hoTen||'').localeCompare(b.e.hoTen||'','vi'); });
       var shown = rows.filter(function(r){
         return !q || (r.e.maNV + ' ' + r.e.hoTen).toLowerCase().indexOf(q) !== -1;
       });
-      return { store: sn, rows: shown, total: total, std: std, diff: total - std, dayCount: days };
+      return { store: sn, rows: shown, total: total, std: std, diff: total - std, dayCount: dayCount };
     });
   }
   function cashierWarning(g){
@@ -7717,6 +7763,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
 
     await mutateStateKeySafe('borrowedStaff', function(fresh){
+      Object.keys(fresh).forEach(function(k){
+        var datePart = k.split('|')[1];
+        if(datePart && datePart < cutoffISO) delete fresh[k];
+      });
+    });
+
+    await mutateStateKeySafe('cashierAssign', function(fresh){
       Object.keys(fresh).forEach(function(k){
         var datePart = k.split('|')[1];
         if(datePart && datePart < cutoffISO) delete fresh[k];
