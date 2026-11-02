@@ -282,6 +282,11 @@
   .sched-table thead th.sched-total-head{
     background:var(--brand-soft);color:var(--brand-dark);border-left:2px solid var(--brand);font-size:11.5px;
   }
+  .sched-tn-total-head{font-size:11px;text-align:center;min-width:84px;}
+  .sched-tn-total-head .sched-tn-sum{display:inline-block;margin-top:3px;padding:1px 8px;border-radius:10px;background:#e3f5ea;color:#12663a;font-weight:800;font-size:12px;}
+  .sched-tn-total-head.bad .sched-tn-sum{background:#fde2e0;color:#b42318;}
+  .sched-tn-total-cell{text-align:center;font-weight:700;color:var(--ink-faint);}
+  .sched-tn-total-cell.has{color:#12663a;}
   .sched-status-head{font-size:11px;}
   .sched-status-cell{min-width:120px;}
   .sched-status-select{
@@ -2395,8 +2400,95 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Các hàm dưới đây giữ lại để không phải sửa hàng chục nơi gọi — đều dùng chung cơ chế an toàn ở trên.
   function saveEmployeesMutation(mutateFn){ return mutateStateKeySafe('employees', mutateFn); }
   function saveEmployeeScheduleStatusMutation(mutateFn){ return mutateStateKeySafe('employeeScheduleStatus', mutateFn); }
+  /* ---------- LƯU NHANH CHO LỊCH: cập nhật giao diện ngay + chỉ gửi phần thay đổi (patch) ----------
+     - Áp thay đổi vào dữ liệu trên máy ngay lập tức -> bấm là thấy (không chờ mạng).
+     - Việc lưu chạy nền, xếp hàng theo thứ tự, chỉ gửi đúng các ô lịch đã đổi (hàm patch_app_state trên Supabase).
+     - Nếu hàm patch_app_state chưa được tạo trên Supabase -> tự dùng cách lưu an toàn cũ (vẫn chạy bình thường).
+     - Lưu lỗi -> hoàn lại ô đó và báo lỗi, không để lệch dữ liệu. */
+  var rpcPatchMissing = false;
+  var patchQueue = {};
+  var patchPending = {};
+  function totalPatchPending(){ var n = 0; Object.keys(patchPending).forEach(function(k){ n += patchPending[k]; }); return n; }
+  function updateSavingBadge(){
+    var el = document.getElementById('savingBadge');
+    if(!el){
+      el = document.createElement('div'); el.id = 'savingBadge';
+      el.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:9999;background:#0f6b4f;color:#fff;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.2);display:none;';
+      document.body.appendChild(el);
+    }
+    var n = totalPatchPending();
+    el.textContent = 'Đang lưu ' + n + ' thay đổi…';
+    el.style.display = n > 0 ? '' : 'none';
+  }
+  window.addEventListener('beforeunload', function(ev){
+    if(totalPatchPending() > 0){ ev.preventDefault(); ev.returnValue = ''; }
+  });
+  function isRpcMissingError(err){
+    if(!err) return false;
+    var m = ((err.message || '') + ' ' + (err.code || '')).toLowerCase();
+    return m.indexOf('patch_app_state') !== -1 || m.indexOf('42883') !== -1 || m.indexOf('pgrst202') !== -1 || m.indexOf('could not find the function') !== -1;
+  }
+  async function sendPatch(key, setObj, delArr, mutateFn){
+    if(!rpcPatchMissing){
+      var failed = true;
+      for(var attempt = 0; attempt < 3; attempt++){
+        try{
+          if(attempt > 0) await new Promise(function(r){ setTimeout(r, 400 * attempt); });
+          var res = await withTimeout(window.supabaseClient.rpc('patch_app_state', { p_key: key, p_set: setObj, p_del: delArr }), 20000);
+          if(res.error){
+            if(isRpcMissingError(res.error)){ rpcPatchMissing = true; failed = false; break; }
+            throw res.error;
+          }
+          if(res.data){ lastKnownUpdatedAt[key] = res.data; return true; }
+          failed = false; break; // dòng chưa tồn tại trên máy chủ -> dùng đường cũ để tạo mới
+        }catch(e){ /* thử lại — patch là thao tác lặp lại an toàn */ }
+      }
+      if(failed) return false;
+    }
+    return await mutateStateKeySafe(key, mutateFn);
+  }
+  async function mutatePatchable(key, mutateFn){
+    var before = state[key] || {};
+    var copy = JSON.parse(JSON.stringify(before));
+    var r = mutateFn(copy);
+    if(r === false) return false;
+    var setObj = {}, delArr = [], prev = {}, changed = 0;
+    Object.keys(copy).forEach(function(k){
+      if(JSON.stringify(before[k]) !== JSON.stringify(copy[k])){ setObj[k] = copy[k]; prev[k] = before[k]; changed++; }
+    });
+    Object.keys(before).forEach(function(k){
+      if(!(k in copy)){ delArr.push(k); prev[k] = before[k]; changed++; }
+    });
+    if(changed === 0) return true;
+    // 1) Áp ngay trên máy
+    if(!state[key] || typeof state[key] !== 'object') state[key] = {};
+    Object.keys(setObj).forEach(function(k){ state[key][k] = setObj[k]; });
+    delArr.forEach(function(k){ delete state[key][k]; });
+    // 2) Lưu nền, tuần tự
+    patchPending[key] = (patchPending[key] || 0) + 1;
+    updateSavingBadge();
+    patchQueue[key] = (patchQueue[key] || Promise.resolve()).then(async function(){
+      var ok = false;
+      try{ ok = await sendPatch(key, setObj, delArr, mutateFn); }catch(e){ ok = false; }
+      if(!ok){
+        // hoàn lại đúng các ô đã đổi (chỉ khi chưa bị thay đổi tiếp bởi thao tác khác)
+        Object.keys(prev).forEach(function(k){
+          var cur = state[key] ? state[key][k] : undefined;
+          var mine = (k in setObj) ? setObj[k] : undefined;
+          if(JSON.stringify(cur) !== JSON.stringify(mine)) return;
+          if(prev[k] === undefined) delete state[key][k]; else state[key][k] = prev[k];
+        });
+        showToast('Không lưu được thay đổi lên máy chủ — đã hoàn lại. Kiểm tra mạng và thử lại.', true);
+        scheduleRealtimeRefetch(key);
+      }
+      patchPending[key]--;
+      updateSavingBadge();
+      if(patchPending[key] <= 0){ if(realtimeRefetchQueue[key]) scheduleRealtimeRefetch(key); renderScheduleMain(); }
+    });
+    return true;
+  }
   async function saveScheduleMutation(mutateFn){
-    var ok = await mutateStateKeySafe('schedule', mutateFn);
+    var ok = await mutatePatchable('schedule', mutateFn);
     renderScheduleMain();
     return ok;
   }
@@ -6284,9 +6376,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function cashierKey(store, date){ return store + '|' + date; }
   function buildCashierSelectHtml(store, date, slot, label, roster){
     var cur = (state.cashierAssign[cashierKey(store, date)] || {})[slot] || '';
-    var dayStaff = roster.filter(function(e){
-      return getScheduleShiftObjects(e.maNV, date).some(function(o){ return o.store === store; }) && !isOffDay(e.maNV, date);
-    });
+    function hasShiftHere(e){ return getScheduleShiftObjects(e.maNV, date).some(function(o){ return o.store === store; }); }
+    // Hiện toàn bộ nhân viên của cửa hàng (kể cả mượn), trừ người OFF; người đã có ca hôm đó xếp lên trước
+    var dayStaff = roster.filter(function(e){ return !isOffDay(e.maNV, date); })
+      .sort(function(a,b){ return (hasShiftHere(b)?1:0) - (hasShiftHere(a)?1:0); });
     var opts = '<option value="">'+label+'</option>';
     var found = false;
     dayStaff.forEach(function(e){
@@ -6295,9 +6388,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
     if(cur && !found){
       var ce = state.employees.find(function(x){ return x.maNV === cur; });
-      opts += '<option value="'+escapeHtml(cur)+'" selected>'+escapeHtml(ce ? ce.hoTen : cur)+' (không còn ca)</option>';
+      opts += '<option value="'+escapeHtml(cur)+'" selected>'+escapeHtml(ce ? ce.hoTen : cur)+' (không thuộc DS)</option>';
     }
     return '<select class="sched-tn-select'+(cur?' filled':'')+'" data-date="'+date+'" data-slot="'+slot+'" title="'+label+'">'+opts+'</select>';
+  }
+  function cashierWeekCounts(store, weekDates){
+    var per = {}, total = 0;
+    weekDates.forEach(function(d){
+      var rec = state.cashierAssign[cashierKey(store, d)] || {};
+      var a = rec.ca1 || '', b = rec.ca2 || '';
+      if(!a && !b) return;
+      if(!a) a = b; if(!b) b = a;   // chỉ khai báo 1 ô -> người đó tính 2 ca
+      per[a] = (per[a]||0) + 1; per[b] = (per[b]||0) + 1; total += 2;
+    });
+    return { per: per, total: total };
   }
   function buildScheduleHeadHtml(weekDates, firstColLabel, store, roster){
     var headHtml = '<th class="sched-emp-head">'+firstColLabel+'</th>';
@@ -6308,10 +6412,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       '</th>';
     });
     headHtml += '<th class="sched-total-head">TỔNG GIỜ/TUẦN</th>';
+    if(store){
+      var cw = cashierWeekCounts(store, weekDates);
+      var bad = cw.total !== 14;
+      headHtml += '<th class="sched-tn-total-head'+(bad?' bad':'')+'" title="Tổng ca thu ngân trong tuần của cửa hàng (chuẩn 14 ca)">CA THU NGÂN<br><span class="sched-tn-sum">'+cw.total+'/14</span></th>';
+    }
     headHtml += '<th class="sched-status-head">TRẠNG THÁI</th>';
     return headHtml;
   }
   function buildScheduleRowsHtml(employees, weekDates, viewStore){
+    var cwk = viewStore ? cashierWeekCounts(viewStore, weekDates) : null;
     return employees.map(function(e){
       var curStatus = getEmployeeScheduleStatus(e.maNV);
       var statusVal = curStatus ? curStatus.status : 'Đang làm';
@@ -6377,6 +6487,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var totalText = targetH > 0 ? (totalH + '/' + targetH) : (totalH + ' giờ');
       var underCls = (targetH > 0 && totalH < targetH) ? ' under-target' : '';
       rowHtml += '<td class="sched-total-cell'+underCls+'">'+totalText+'</td>';
+      if(cwk){ var n = cwk.per[e.maNV] || 0; rowHtml += '<td class="sched-tn-total-cell'+(n?' has':'')+'">'+(n||'—')+'</td>'; }
       rowHtml += statusCellHtml;
       rowHtml += '</tr>';
       return rowHtml;
@@ -7075,7 +7186,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     var store = state.scheduleSelectedStore, date = sel.dataset.date, slot = sel.dataset.slot, val = sel.value;
     sel.disabled = true;
-    await mutateStateKeySafe('cashierAssign', function(fresh){
+    await mutatePatchable('cashierAssign', function(fresh){
       var k = cashierKey(store, date);
       var rec = fresh[k] || {};
       if(val) rec[slot] = val; else delete rec[slot];
@@ -7698,17 +7809,31 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var realtimeRefetchQueue = {};
   var realtimeRefetchTimer = null;
 
+  var lastRefetchAt = {};
+  var HEAVY_KEYS = { schedule: true, cashierAssign: true };
   function scheduleRealtimeRefetch(key){
     if(APP_STATE_KEYS.indexOf(key) === -1) return;
     realtimeRefetchQueue[key] = true;
-    if(realtimeRefetchTimer) clearTimeout(realtimeRefetchTimer);
-    realtimeRefetchTimer = setTimeout(flushRealtimeRefetch, 400); // gộp nhiều tín hiệu gần nhau lại 1 lần tải
+    if(realtimeRefetchTimer) return; // đã có lịch tải -> gộp chung, không dời lịch (tránh bị trì hoãn mãi khi nhiều người cùng sửa)
+    realtimeRefetchTimer = setTimeout(function(){ realtimeRefetchTimer = null; flushRealtimeRefetch(); }, 500);
   }
 
   async function flushRealtimeRefetch(){
     var keys = Object.keys(realtimeRefetchQueue);
     realtimeRefetchQueue = {};
+    // Không tải đè khi máy này còn thay đổi chưa lưu xong; và giãn tối thiểu 3 giây giữa các lần tải bảng lịch lớn.
+    var nowMs = Date.now(), later = [];
+    keys = keys.filter(function(k){
+      if((patchPending[k] || 0) > 0){ later.push(k); return false; }
+      if(HEAVY_KEYS[k] && lastRefetchAt[k] && nowMs - lastRefetchAt[k] < 3000){ later.push(k); return false; }
+      return true;
+    });
+    if(later.length){
+      later.forEach(function(k){ realtimeRefetchQueue[k] = true; });
+      if(!realtimeRefetchTimer) realtimeRefetchTimer = setTimeout(function(){ realtimeRefetchTimer = null; flushRealtimeRefetch(); }, 1500);
+    }
     if(keys.length === 0) return;
+    keys.forEach(function(k){ lastRefetchAt[k] = nowMs; });
     try{
       var res = await window.supabaseClient.from('app_state').select('key,data,updated_at').in('key', keys);
       if(res.error) throw res.error;
@@ -7716,6 +7841,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         // CHỈ áp dụng khi tải được dữ liệu THẬT từ máy chủ — không bao giờ tự ý đặt về rỗng
         // để tránh lặp lại sự cố ghi đè mất dữ liệu.
         if(row && row.data !== undefined && row.data !== null){
+          if((patchPending[row.key] || 0) > 0){ realtimeRefetchQueue[row.key] = true; return; } // máy này vừa có thay đổi mới -> tải lại sau
           state[row.key] = row.data;
           lastKnownUpdatedAt[row.key] = row.updated_at;
         }
