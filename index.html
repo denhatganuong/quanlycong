@@ -7510,97 +7510,63 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var n = String(name || '').normalize('NFC').trim().toLowerCase().replace(/\s+/g,' ');
     return n === 'thu ngân' || n === 'thu ngân bán hàng';
   }
-  // Mỗi ca có công việc Thu ngân / Thu ngân bán hàng = 1 ca. Nếu cả cửa hàng trong ngày chỉ có đúng 1 ca thu ngân -> người đứng ca đó tính 2 ca.
+  // Bảng ca thu ngân: mỗi nhân viên 1 dòng, cộng dồn ca ở tất cả cửa hàng trong tháng.
+  // Mỗi ô khai báo Thu ngân ca 1 / ca 2 = 1 ca. Ngày chỉ khai báo 1 người -> người đó tính 2 ca.
   function computeCashierData(year, month, numDays){
     var allowed = (state.currentUserPerm && state.currentUserPerm.stores && state.currentUserPerm.stores.length) ? state.currentUserPerm.stores : null;
     var storeNames = state.stores.map(function(s){ return s.tenCuaHang; }).filter(function(n){
       if(allowed && allowed.indexOf(n) === -1) return false;
       if(state.tcFilterStore && n !== state.tcFilterStore) return false;
       return true;
-    }).sort(function(a,b){ return a.localeCompare(b,'vi'); });
+    });
     var empByCode = {}; state.employees.forEach(function(e){ empByCode[e.maNV] = e; });
     var q = (state.tcSearch || '').trim().toLowerCase();
-    var std = numDays * 2;
-    return storeNames.map(function(sn){
-      var per = {};
-      var dayCount = [];
+    var per = {}; // maNV -> { total, stores: {tenCH: soCa} }
+    storeNames.forEach(function(sn){
       for(var d=1; d<=numDays; d++){
         var rec = state.cashierAssign[cashierKey(sn, tcDateISO(year, month, d))];
         if(!rec) continue;
         var slots = [rec.ca1, rec.ca2].filter(function(x){ return x && empByCode[x]; });
         if(slots.length === 0) continue;
-        dayCount[d] = slots.length;
-        if(slots.length === 1) slots = [slots[0], slots[0]]; // chỉ có 1 người đứng thu ngân trong ngày -> tính 2 ca
+        if(slots.length === 1) slots = [slots[0], slots[0]];
         slots.forEach(function(m){
-          per[m] = per[m] || [];
-          per[m][d] = (per[m][d] || 0) + 1;
+          var o = per[m] = per[m] || { total: 0, stores: {} };
+          o.total++; o.stores[sn] = (o.stores[sn] || 0) + 1;
         });
       }
-      var total = 0;
-      var rows = Object.keys(per).map(function(maNV){
-        var dayVals = [], sum = 0;
-        for(var d=1; d<=numDays; d++){ var v = per[maNV][d] || 0; dayVals[d] = v; sum += v; }
-        total += sum;
-        return { e: empByCode[maNV], days: dayVals, total: sum };
-      }).sort(function(a,b){ return (a.e.hoTen||'').localeCompare(b.e.hoTen||'','vi'); });
-      var shown = rows.filter(function(r){
-        return !q || (r.e.maNV + ' ' + r.e.hoTen).toLowerCase().indexOf(q) !== -1;
-      });
-      return { store: sn, rows: shown, total: total, std: std, diff: total - std, dayCount: dayCount };
     });
-  }
-  function cashierWarning(g){
-    if(g.diff === 0) return { ok:true, text:'✓ Đủ ' + g.std + ' ca' };
-    return { ok:false, text:'⚠ ' + (g.diff < 0 ? 'Thiếu ' + (-g.diff) : 'Thừa ' + g.diff) + ' ca (' + g.total + '/' + g.std + ')' };
+    var rows = Object.keys(per).map(function(maNV){
+      var o = per[maNV];
+      var names = Object.keys(o.stores).sort(function(a,b){ return a.localeCompare(b,'vi'); });
+      var storeText = names.length === 1 ? names[0] : names.map(function(n){ return n + ' (' + o.stores[n] + ')'; }).join(', ');
+      return { e: empByCode[maNV], total: o.total, storeText: storeText };
+    }).filter(function(r){
+      return !q || (r.e.maNV + ' ' + r.e.hoTen + ' ' + r.storeText).toLowerCase().indexOf(q) !== -1;
+    }).sort(function(a,b){ return (a.e.hoTen||'').localeCompare(b.e.hoTen||'','vi'); });
+    return rows;
   }
   function renderTcCashier(){
     var year = state.tcYear, month = state.tcMonth, numDays = daysInMonth(year, month);
-    var data = computeCashierData(year, month, numDays);
-    var head = '<th class="tc-head-fixed">CỬA HÀNG</th><th class="tc-head-fixed">MÃ NV</th><th class="tc-head-fixed">TÊN NV</th><th class="tc-summary-head">TỔNG CA THU NGÂN</th><th class="tc-summary-head">CẢNH BÁO CH</th>';
-    for(var d=1; d<=numDays; d++) head += '<th class="tc-day-head">'+d+'</th>';
-    document.getElementById('tcCashHead').innerHTML = head;
-    var warnCount = 0;
-    var html = data.map(function(g){
-      var w = cashierWarning(g); if(!w.ok) warnCount++;
-      var wCell = '<td style="font-weight:700;white-space:nowrap;color:'+(w.ok?'var(--brand-dark)':'#c0392b')+';">'+escapeHtml(w.text)+'</td>';
-      if(g.rows.length === 0){
-        var tds = ''; for(var d=1; d<=numDays; d++) tds += '<td>-</td>';
-        return '<tr><td class="tc-name-cell"><div class="n">'+escapeHtml(g.store)+'</div></td><td colspan="2" style="color:var(--ink-faint);">Chưa có ca thu ngân</td><td class="tc-summary-cell">0</td>'+wCell+tds+'</tr>';
-      }
-      return g.rows.map(function(r, i){
-        var row = '<tr>';
-        if(i === 0) row += '<td class="tc-name-cell" rowspan="'+g.rows.length+'" style="vertical-align:top;"><div class="n">'+escapeHtml(g.store)+'</div></td>';
-        row += '<td class="tc-name-cell col-code">'+escapeHtml(r.e.maNV)+'</td><td class="tc-name-cell"><div class="n">'+escapeHtml(r.e.hoTen||'—')+'</div></td>' +
-          '<td class="tc-summary-cell tc-total-cell">'+r.total+'</td>';
-        if(i === 0) row += wCell.replace('<td ','<td rowspan="'+g.rows.length+'" ').replace('style="','style="vertical-align:top;');
-        for(var d=1; d<=numDays; d++){
-          var over = (g.dayCount[d] || 0) > 2; // cửa hàng có hơn 2 ca thu ngân trong ngày -> tô đỏ cột ngày
-          var st = over ? ' style="background:#fde2e0;color:#b42318;font-weight:800;"' : '';
-          row += r.days[d] ? '<td'+st+'><span class="tc-day-cell work"'+(over?' style="color:#b42318;font-weight:800;"':'')+'>'+r.days[d]+'</span></td>' : '<td'+st+'>-</td>';
-        }
-        return row + '</tr>';
-      }).join('');
-    }).join('');
+    var rows = computeCashierData(year, month, numDays);
+    document.getElementById('tcCashHead').innerHTML = '<th class="tc-head-fixed">MÃ NV</th><th class="tc-head-fixed">TÊN NV</th><th class="tc-head-fixed">CỬA HÀNG</th><th class="tc-summary-head">SỐ CA THU NGÂN</th>';
+    var html = rows.length === 0
+      ? '<tr><td colspan="4" style="color:var(--ink-faint);text-align:center;padding:14px;">Chưa có ca thu ngân nào được khai báo trong tháng này</td></tr>'
+      : rows.map(function(r){
+          return '<tr><td class="tc-name-cell col-code">'+escapeHtml(r.e.maNV)+'</td>' +
+            '<td class="tc-name-cell"><div class="n">'+escapeHtml(r.e.hoTen||'—')+'</div></td>' +
+            '<td class="tc-name-cell"><div class="n">'+escapeHtml(r.storeText)+'</div></td>' +
+            '<td class="tc-summary-cell tc-total-cell">'+r.total+'</td></tr>';
+        }).join('');
     document.getElementById('tcCashTbody').innerHTML = html;
     document.getElementById('tcCashHeading').textContent = 'Bảng danh sách ca thu ngân tháng ' + month + '/' + year;
-    document.getElementById('tcCashSub').textContent = 'Chuẩn ' + (numDays*2) + ' ca/cửa hàng (' + numDays + ' ngày × 2) · ' + warnCount + ' cửa hàng cần chú ý · Ngày chỉ có 1 ca thu ngân được tính 2 ca · Cột đỏ = ngày cửa hàng có hơn 2 ca thu ngân';
+    document.getElementById('tcCashSub').textContent = 'Số ca cộng dồn ở tất cả cửa hàng · Ngày chỉ khai báo 1 người thu ngân được tính 2 ca · Khai báo ở Xếp lịch cửa hàng (Thu ngân ca 1 / ca 2)';
   }
   document.getElementById('btnExportCashier').addEventListener('click', function(){
     var year = state.tcYear, month = state.tcMonth, numDays = daysInMonth(year, month);
-    var data = computeCashierData(year, month, numDays);
-    var rows = [['Cửa hàng','Mã NV','Tên NV','Tổng ca thu ngân','Cảnh báo CH']];
-    for(var d=1; d<=numDays; d++) rows[0].push(d);
-    data.forEach(function(g){
-      var w = cashierWarning(g).text;
-      if(g.rows.length === 0){ var r0=[g.store,'','',0,w]; for(var d=1; d<=numDays; d++) r0.push(''); rows.push(r0); return; }
-      g.rows.forEach(function(r){
-        var row = [g.store, r.e.maNV, r.e.hoTen||'', r.total, w];
-        for(var d=1; d<=numDays; d++) row.push(r.days[d] || '');
-        rows.push(row);
-      });
-    });
+    var rows = [['Mã NV','Tên NV','Cửa hàng','Số ca thu ngân']];
+    computeCashierData(year, month, numDays).forEach(function(r){ rows.push([r.e.maNV, r.e.hoTen||'', r.storeText, r.total]); });
     var ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{wch:24},{wch:12},{wch:26},{wch:16},{wch:26}].concat(Array.from({length:numDays},function(){return {wch:4};}));
+    ws['!cols'] = [{wch:12},{wch:26},{wch:40},{wch:16}];
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'CaThuNgan');
     var wbout = XLSX.write(wb, {type:'array', bookType:'xlsx'});
