@@ -195,6 +195,8 @@
   }
   .timeline-inner.locked .timeline-block{pointer-events:none;opacity:.75;cursor:not-allowed;}
 
+  .sched-legend{display:flex;flex-wrap:wrap;gap:0;margin:12px 0 4px;}
+  .sched-legend-chip{color:#fff;font-size:12.5px;font-weight:600;padding:9px 22px;text-align:center;letter-spacing:.01em;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .sched-table{width:100%;border-collapse:collapse;min-width:1000px;}
   .sched-table thead th{
     text-align:center;font-size:11.5px;font-weight:650;color:var(--ink-soft);
@@ -212,6 +214,16 @@
   }
   .sched-day-copy-btn:hover{background:var(--brand-soft);color:var(--brand-dark);}
   .sched-table.locked .sched-day-copy-btn{pointer-events:none;opacity:.4;}
+  .sched-table thead th.sched-day .sched-day-line{display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;}
+  .sched-table thead th.sched-day .dow{display:inline;font-size:12px;}
+  .sched-table thead th.sched-day .date{display:inline;margin-top:0;font-size:11px;}
+  .sched-table thead th.sched-day .sched-day-copy-btn{margin-top:0;}
+  .sched-open-label{font-size:9.5px;font-weight:700;color:var(--ink-soft);margin-top:4px;text-align:left;max-width:130px;margin-left:auto;margin-right:auto;}
+  .sched-open-time{display:block;width:100%;min-width:92px;max-width:130px;margin:2px auto 0;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--ink);font-family:inherit;}
+  .sched-open-time.changed{background:var(--gold-soft);border-color:var(--gold);font-weight:700;}
+  .sched-table.locked .sched-open-time{pointer-events:none;opacity:.55;}
+  .sched-tn-label{font-size:9.5px;font-weight:700;color:var(--ink-soft);margin-top:6px;text-align:left;max-width:130px;margin-left:auto;margin-right:auto;}
+  .sched-tn-label + .sched-tn-select{margin-top:2px;}
   .sched-tn-select{display:block;width:100%;min-width:92px;max-width:130px;margin:4px auto 0;font-size:10.5px;padding:3px 2px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--ink);font-family:inherit;}
   .sched-tn-select.filled{background:var(--brand-soft);color:var(--brand-dark);font-weight:650;border-color:var(--brand);}
   .sched-table.locked .sched-tn-select{pointer-events:none;opacity:.55;}
@@ -244,12 +256,19 @@
   }
   .sched-add-btn:hover{border-color:var(--brand);color:var(--brand);background:var(--brand-soft);}
   .sched-cell-stack{display:flex;flex-direction:column;gap:3px;cursor:pointer;}
+  .ca-color-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-top:6px;}
+  .ca-color-lbl{font-size:11px;color:var(--ink-soft);font-weight:600;margin-right:2px;}
+  .ca-color-chip{border:2px solid transparent;color:#fff;font-size:10.5px;font-weight:600;padding:3px 7px;border-radius:5px;cursor:pointer;opacity:.55;font-family:inherit;}
+  .ca-color-chip.active{opacity:1;border-color:var(--ink);box-shadow:0 0 0 1px #fff inset;}
+  .ca-color-row.is-default::after{content:'mặc định: đen';font-size:10px;color:var(--ink-faint);margin-left:2px;}
+  .ca-picker.disabled ~ .ca-color-row{opacity:.4;pointer-events:none;}
   .sched-assigned{
     width:100%;min-height:19px;border-radius:6px;border:none;cursor:pointer;
     display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 2px;
     font-size:10.3px;font-weight:700;line-height:1.25;
   }
-  .sched-assigned .t{font-size:9px;font-weight:500;opacity:.85;}
+  .sched-assigned, .sched-assigned .t{color:#fff !important;}
+  .sched-assigned .t{font-size:9px;font-weight:500;opacity:.92;}
   .sched-total-cell{
     text-align:center;font-weight:560;font-variant-numeric:tabular-nums;font-size:12.5px;min-width:92px;
     background:var(--brand-soft);color:var(--brand-dark);border-left:2px solid var(--brand);
@@ -1031,6 +1050,12 @@
               <h3>Cửa hàng này chưa có nhân viên</h3>
               <p>Vào tab Nhân viên, thêm nhân viên và chọn đúng cửa hàng này ở ô "Chi nhánh (Cửa hàng)".</p>
             </div>
+          </div>
+
+          <div class="sched-legend" aria-label="Chú thích công việc">
+            <span class="sched-legend-chip" style="background:#ff0000;">CHẾ BIẾN</span>
+            <span class="sched-legend-chip" style="background:#0070c0;">THU NGÂN</span>
+            <span class="sched-legend-chip" style="background:#375623;">BÁN HÀNG - PHỤC VỤ</span>
           </div>
 
           <div class="table-card" id="timelineCard" style="margin-top:18px;display:none;">
@@ -1961,6 +1986,7 @@
             <div class="ca-picker-panel" id="scheduleCellCa1Panel"></div>
             <select id="scheduleCellCa1" class="visually-hidden"></select>
           </div>
+          <div class="ca-color-row" data-col="scheduleCellCa1"><span class="ca-color-lbl">Màu ca:</span><button type="button" class="ca-color-chip" data-color="cb" style="background:#ff0000;" title="Chế biến">Chế biến</button><button type="button" class="ca-color-chip" data-color="tn" style="background:#0070c0;" title="Thu ngân">Thu ngân</button><button type="button" class="ca-color-chip" data-color="bh" style="background:#375623;" title="Bán hàng - Phục vụ">Bán hàng</button></div>
         </div>
         <div class="form-field">
           <label><span class="cat-dot tag-cat2"></span> Ca 2 (tuỳ chọn)</label>
@@ -1969,6 +1995,7 @@
             <div class="ca-picker-panel" id="scheduleCellCa2Panel"></div>
             <select id="scheduleCellCa2" class="visually-hidden"></select>
           </div>
+          <div class="ca-color-row" data-col="scheduleCellCa2"><span class="ca-color-lbl">Màu ca:</span><button type="button" class="ca-color-chip" data-color="cb" style="background:#ff0000;" title="Chế biến">Chế biến</button><button type="button" class="ca-color-chip" data-color="tn" style="background:#0070c0;" title="Thu ngân">Thu ngân</button><button type="button" class="ca-color-chip" data-color="bh" style="background:#375623;" title="Bán hàng - Phục vụ">Bán hàng</button></div>
         </div>
         <div class="form-field">
           <label><span class="cat-dot tag-catsp"></span> Ca đặc biệt (tuỳ chọn)</label>
@@ -1977,6 +2004,7 @@
             <div class="ca-picker-panel" id="scheduleCellCa3Panel"></div>
             <select id="scheduleCellCa3" class="visually-hidden"></select>
           </div>
+          <div class="ca-color-row" data-col="scheduleCellCa3"><span class="ca-color-lbl">Màu ca:</span><button type="button" class="ca-color-chip" data-color="cb" style="background:#ff0000;" title="Chế biến">Chế biến</button><button type="button" class="ca-color-chip" data-color="tn" style="background:#0070c0;" title="Thu ngân">Thu ngân</button><button type="button" class="ca-color-chip" data-color="bh" style="background:#375623;" title="Bán hàng - Phục vụ">Bán hàng</button></div>
         </div>
       </div>
       <p id="scheduleCellError" style="color:var(--danger);font-size:12.5px;margin:12px 0 0;display:none;">⚠ Chỉ được chọn tối đa 2 ca cùng lúc trong 1 ngày.</p>
@@ -2213,6 +2241,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     scheduleLocks: {},
     scheduleLockLog: {},
     cashierAssign: {},
+    openingHours: {},
     holidayMultipliers: {},
     tcMonth: 0,
     tcYear: 0,
@@ -2236,11 +2265,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var SALARY_FIELDS = ["luongCB","chuyenCan","dienThoai","xangXe","hoTroKiemNhiem","kpiKhac"];
 
   /* ---------- Persistence (đổi sang Supabase — dữ liệu dùng chung qua internet) ---------- */
-  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','scheduleLockLog','cashierAssign','holidayMultipliers','userPermissions','updateRequests','advanceRequests'];
+  var APP_STATE_KEYS = ['employees','jobTitles','shifts','salaryAllocations','stores','schedule','borrowedStaff','employeeScheduleStatus','tasks','scheduleLocks','scheduleLockLog','cashierAssign','openingHours','holidayMultipliers','userPermissions','updateRequests','advanceRequests'];
   var APP_STATE_DEFAULTS = {
     employees: [], jobTitles: [], shifts: [], salaryAllocations: {}, stores: [],
     schedule: {}, borrowedStaff: {}, employeeScheduleStatus: {}, tasks: [],
-    scheduleLocks: {}, scheduleLockLog: {}, cashierAssign: {}, holidayMultipliers: {}, userPermissions: {}, updateRequests: [], advanceRequests: []
+    scheduleLocks: {}, scheduleLockLog: {}, cashierAssign: {}, openingHours: {}, holidayMultipliers: {}, userPermissions: {}, updateRequests: [], advanceRequests: []
   };
   var lastKnownUpdatedAt = {};
 
@@ -2450,15 +2479,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
   async function mutatePatchable(key, mutateFn){
     var before = state[key] || {};
-    var copy = JSON.parse(JSON.stringify(before));
+    // Không nhân bản cả bảng lịch lớn: chỉ nhân bản đúng các ô mà thao tác chạm tới (Proxy) -> rất nhanh dù dữ liệu nhiều.
+    var target = Object.assign({}, before);
+    var touched = {}, origStr = {};
+    function touch(t, k){
+      if(typeof k !== 'string' || touched[k]) return;
+      touched[k] = true;
+      if(k in t){
+        origStr[k] = JSON.stringify(t[k]);
+        if(t[k] && typeof t[k] === 'object') t[k] = JSON.parse(origStr[k]);
+      } else { origStr[k] = undefined; }
+    }
+    var copy = new Proxy(target, {
+      get: function(t, k){ touch(t, k); return t[k]; },
+      set: function(t, k, v){ touch(t, k); t[k] = v; return true; },
+      deleteProperty: function(t, k){ touch(t, k); delete t[k]; return true; }
+    });
     var r = mutateFn(copy);
     if(r === false) return false;
     var setObj = {}, delArr = [], prev = {}, changed = 0;
-    Object.keys(copy).forEach(function(k){
-      if(JSON.stringify(before[k]) !== JSON.stringify(copy[k])){ setObj[k] = copy[k]; prev[k] = before[k]; changed++; }
-    });
-    Object.keys(before).forEach(function(k){
-      if(!(k in copy)){ delArr.push(k); prev[k] = before[k]; changed++; }
+    Object.keys(touched).forEach(function(k){
+      var existsNow = (k in target);
+      var curStr = existsNow ? JSON.stringify(target[k]) : undefined;
+      if(curStr === origStr[k]) return;
+      prev[k] = (origStr[k] === undefined) ? undefined : JSON.parse(origStr[k]);
+      changed++;
+      if(existsNow) setObj[k] = target[k]; else delArr.push(k);
     });
     if(changed === 0) return true;
     // 1) Áp ngay trên máy
@@ -6375,24 +6421,48 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ---------- Schedule: main grid ---------- */
   // Thu ngân ca 1 / ca 2 của cửa hàng theo ngày: state.cashierAssign[store|date] = { ca1: maNV, ca2: maNV }
   function cashierKey(store, date){ return store + '|' + date; }
+  var DEFAULT_OPEN_TIME = '08:30';
+  function shortName(full){
+    var parts = String(full || '').trim().split(/\s+/);
+    return parts[parts.length - 1] || '';
+  }
   function buildCashierSelectHtml(store, date, slot, label, roster){
     var cur = (state.cashierAssign[cashierKey(store, date)] || {})[slot] || '';
     function hasShiftHere(e){ return getScheduleShiftObjects(e.maNV, date).some(function(o){ return o.store === store; }); }
     // Hiện toàn bộ nhân viên của cửa hàng (kể cả mượn), trừ người OFF; người đã có ca hôm đó xếp lên trước
     var dayStaff = roster.filter(function(e){ return !isOffDay(e.maNV, date); })
       .sort(function(a,b){ return (hasShiftHere(b)?1:0) - (hasShiftHere(a)?1:0); });
-    var opts = '<option value="">'+label+'</option>';
+    // Ô đóng chỉ hiện tên ngắn (từ cuối của họ tên); mở danh sách thì hiện đầy đủ họ tên (xử lý ở focusin/focusout)
+    function opt(code, full, extra, selected){
+      return '<option value="'+escapeHtml(code)+'"'+(selected?' selected':'')+' data-full="'+escapeHtml(full + extra)+'" data-short="'+escapeHtml(shortName(full) + extra)+'">'+escapeHtml(selected ? shortName(full) + extra : full + extra)+'</option>';
+    }
+    var opts = '<option value="" data-full="— Chọn —" data-short="— Chọn —">— Chọn —</option>';
     var found = false;
     dayStaff.forEach(function(e){
       if(e.maNV === cur) found = true;
-      opts += '<option value="'+escapeHtml(e.maNV)+'"'+(e.maNV===cur?' selected':'')+'>'+escapeHtml(e.hoTen||e.maNV)+(e._borrowed?' (mượn)':'')+'</option>';
+      opts += opt(e.maNV, e.hoTen || e.maNV, e._borrowed ? ' (mượn)' : '', e.maNV === cur);
     });
     if(cur && !found){
       var ce = state.employees.find(function(x){ return x.maNV === cur; });
-      opts += '<option value="'+escapeHtml(cur)+'" selected>'+escapeHtml(ce ? ce.hoTen : cur)+' (không thuộc DS)</option>';
+      opts += opt(cur, ce ? ce.hoTen : cur, ' (không thuộc DS)', true);
     }
-    return '<select class="sched-tn-select'+(cur?' filled':'')+'" data-date="'+date+'" data-slot="'+slot+'" title="'+label+'">'+opts+'</select>';
+    return '<div class="sched-tn-label">'+label+'</div>' +
+      '<select class="sched-tn-select'+(cur?' filled':'')+'" data-date="'+date+'" data-slot="'+slot+'" title="'+label+'">'+opts+'</select>';
   }
+  (function(){
+    var head = document.getElementById('scheduleStaffHeadRow');
+    function swap(sel, mode){
+      Array.prototype.forEach.call(sel.options, function(o){
+        if(!o.dataset.full) return;
+        if(mode === 'full') o.textContent = o.dataset.full;
+        else o.textContent = o.selected ? o.dataset.short : o.dataset.full;
+      });
+    }
+    head.addEventListener('focusin', function(ev){ var sel = ev.target.closest && ev.target.closest('.sched-tn-select'); if(sel) swap(sel, 'full'); });
+    head.addEventListener('mousedown', function(ev){ var sel = ev.target.closest && ev.target.closest('.sched-tn-select'); if(sel) swap(sel, 'full'); });
+    head.addEventListener('focusout', function(ev){ var sel = ev.target.closest && ev.target.closest('.sched-tn-select'); if(sel) swap(sel, 'short'); });
+    head.addEventListener('change', function(ev){ var sel = ev.target.closest && ev.target.closest('.sched-tn-select'); if(sel) swap(sel, 'short'); });
+  })();
   function cashierWeekCounts(store, weekDates){
     var per = {}, total = 0;
     weekDates.forEach(function(d){
@@ -6407,8 +6477,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function buildScheduleHeadHtml(weekDates, firstColLabel, store, roster){
     var headHtml = '<th class="sched-emp-head">'+firstColLabel+'</th>';
     weekDates.forEach(function(d, idx){
-      headHtml += '<th class="sched-day"><span class="dow">'+WEEKDAY_LABELS[idx]+'</span><span class="date">'+formatDDMM(d)+'</span>' +
-        '<button type="button" class="sched-day-copy-btn" data-date="'+d+'" title="Sao chép lịch ngày này sang ngày khác">⧉</button>' +
+      var openT = (store && state.openingHours[cashierKey(store, d)]) || DEFAULT_OPEN_TIME;
+      headHtml += '<th class="sched-day"><div class="sched-day-line"><span class="dow">'+WEEKDAY_LABELS[idx]+'</span><span class="date">'+formatDDMM(d)+'</span>' +
+        '<button type="button" class="sched-day-copy-btn" data-date="'+d+'" title="Sao chép lịch ngày này sang ngày khác">⧉</button></div>' +
+        (store ? '<div class="sched-open-label">Giờ mở cửa</div><input type="time" class="sched-open-time'+(openT !== DEFAULT_OPEN_TIME ? ' changed' : '')+'" data-date="'+d+'" value="'+escapeHtml(openT)+'" title="Giờ mở cửa ngày này (mặc định '+DEFAULT_OPEN_TIME+')">' : '') +
         (store ? buildCashierSelectHtml(store, d, 'ca1', 'Thu ngân ca 1', roster || []) + buildCashierSelectHtml(store, d, 'ca2', 'Thu ngân ca 2', roster || []) : '') +
       '</th>';
     });
@@ -6464,7 +6536,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           var badgesHtml = thisStoreShifts.map(function(o){
             var shift = getShiftByCode(o.code);
             var cls = shift ? scheduleCatClass(shift.loaiCa) : 'tag-6';
-            return '<div class="sched-assigned '+cls+'" title="'+(shift ? escapeHtml(shift.tenCa) : '')+'">' +
+            return '<div class="sched-assigned '+cls+'" style="background:'+shiftColorHex(o.color)+';color:#fff;" title="'+(shift ? escapeHtml(shift.tenCa) : '')+'">' +
                 escapeHtml(o.code) +
                 (shift ? '<span class="t">'+escapeHtml(shift.batDau)+'-'+escapeHtml(shift.ketThuc)+'</span>' : '') +
               '</div>';
@@ -6755,6 +6827,24 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ---------- Schedule: cell assign modal ---------- */
   var scheduleCellOverlay = document.getElementById('scheduleCellOverlay');
   var SCHEDULE_CAT_SELECT_IDS = ['scheduleCellCa1', 'scheduleCellCa2', 'scheduleCellCa3'];
+  var SHIFT_COLOR_HEX = { cb: '#ff0000', tn: '#0070c0', bh: '#375623' };
+  var SHIFT_COLOR_DEFAULT = '#000000';
+  function shiftColorHex(c){ return SHIFT_COLOR_HEX[c] || SHIFT_COLOR_DEFAULT; }
+  var cellColors = { scheduleCellCa1: '', scheduleCellCa2: '', scheduleCellCa3: '' };
+  function paintColorRow(col){
+    var row = document.querySelector('.ca-color-row[data-col="'+col+'"]');
+    if(!row) return;
+    row.querySelectorAll('.ca-color-chip').forEach(function(b){ b.classList.toggle('active', b.dataset.color === cellColors[col]); });
+    row.classList.toggle('is-default', !cellColors[col]);
+  }
+  document.querySelectorAll('.ca-color-row').forEach(function(row){
+    row.addEventListener('click', function(ev){
+      var b = ev.target.closest('.ca-color-chip'); if(!b) return;
+      var col = row.dataset.col;
+      cellColors[col] = (cellColors[col] === b.dataset.color) ? '' : b.dataset.color; // bấm lại để bỏ chọn -> về mặc định đen
+      paintColorRow(col);
+    });
+  });
 
   function populateScheduleCatSelect(prefix, category, currentCodes){
     var sel = document.getElementById(prefix);
@@ -6852,6 +6942,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     populateScheduleCatSelect('scheduleCellCa1', 'Ca 1', current);
     populateScheduleCatSelect('scheduleCellCa2', 'Ca 2', current);
     populateScheduleCatSelect('scheduleCellCa3', 'Ca đặc biệt', current);
+    (function(){
+      var prevHere = getScheduleShiftObjects(maNV, date).filter(function(o){ return o.store === state.scheduleSelectedStore; });
+      SCHEDULE_CAT_SELECT_IDS.forEach(function(id){
+        var v = document.getElementById(id).value;
+        var po = v ? prevHere.find(function(o){ return o.code === v; }) : null;
+        cellColors[id] = (po && po.color) ? po.color : '';
+        paintColorRow(id);
+      });
+    })();
     document.getElementById('scheduleCellError').style.display = 'none';
     document.getElementById('scheduleCellOffToggle').classList.toggle('active', offActive);
     setSchedulePickersDisabled(offActive);
@@ -6959,8 +7058,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       closeScheduleCellModal();
       return;
     }
-    var picked = SCHEDULE_CAT_SELECT_IDS.map(function(id){ return document.getElementById(id).value; })
-      .filter(function(v){ return v; });
+    var pickedCols = SCHEDULE_CAT_SELECT_IDS.map(function(id){ return { code: document.getElementById(id).value, color: cellColors[id] || '' }; })
+      .filter(function(x){ return x.code; });
+    var picked = pickedCols.map(function(x){ return x.code; });
     if(picked.length > 2){
       document.getElementById('scheduleCellError').style.display = 'block';
       saveBtn.disabled = false;
@@ -6970,9 +7070,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     var prevObjs = getScheduleShiftObjects(state.scheduleCellMaNV, state.scheduleCellDate)
       .filter(function(o){ return o.store === storeForEntry; });
-    var pickedObjs = picked.map(function(code){
-      var prev = prevObjs.find(function(o){ return o.code === code; });
-      return { code: code, task: prev ? prev.task : '' };
+    var pickedObjs = pickedCols.map(function(x){
+      var prev = prevObjs.find(function(o){ return o.code === x.code; });
+      var obj = { code: x.code, task: prev ? prev.task : '' };
+      if(x.color) obj.color = x.color;
+      return obj;
     });
     var conflictMsg = '';
     var okSave = await saveScheduleMutation(function(fresh){
@@ -7178,6 +7280,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   /* ---------- Schedule: khai báo Thu ngân ca 1 / ca 2 theo ngày ---------- */
   document.getElementById('scheduleStaffHeadRow').addEventListener('change', async function(ev){
+    var tin = ev.target.closest('.sched-open-time');
+    if(tin && state.scheduleSelectedStore){
+      if(isWeekLocked(state.scheduleSelectedStore, state.scheduleWeekStart)){
+        showToast('Tuần này đã chốt công, không thể chỉnh sửa.', true);
+        renderScheduleMain();
+        return;
+      }
+      var oStore = state.scheduleSelectedStore, oDate = tin.dataset.date, oVal = tin.value || DEFAULT_OPEN_TIME;
+      await mutatePatchable('openingHours', function(fresh){
+        var k = cashierKey(oStore, oDate);
+        if(oVal === DEFAULT_OPEN_TIME) delete fresh[k]; else fresh[k] = oVal;
+      });
+      renderScheduleMain();
+      return;
+    }
     var sel = ev.target.closest('.sched-tn-select');
     if(!sel || !state.scheduleSelectedStore) return;
     if(isWeekLocked(state.scheduleSelectedStore, state.scheduleWeekStart)){
@@ -7254,8 +7371,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         }
         var shiftsHere = (fromEntry.shifts||[]).map(function(s){
           var obj = typeof s === 'string' ? {code:s, task:''} : s;
-          return { code: obj.code, task: obj.task||'', store: obj.store || fromEntry.store || null };
-        }).filter(function(o){ return o.store === storeForCopy; }).map(function(o){ return {code:o.code, task:o.task}; });
+          return { code: obj.code, task: obj.task||'', color: obj.color||'', store: obj.store || fromEntry.store || null };
+        }).filter(function(o){ return o.store === storeForCopy; }).map(function(o){ var r = {code:o.code, task:o.task}; if(o.color) r.color = o.color; return r; });
         if(shiftsHere.length === 0) return;
         targets.forEach(function(toDate){
           applyStoreShiftsForDay(fresh, scheduleKey(e.maNV, toDate), storeForCopy, shiftsHere);
@@ -7293,8 +7410,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           }
           var shiftsHere = (fromEntry.shifts||[]).map(function(s){
             var obj = typeof s === 'string' ? {code:s, task:''} : s;
-            return { code: obj.code, task: obj.task||'', store: obj.store || fromEntry.store || null };
-          }).filter(function(o){ return o.store === storeForCopy; }).map(function(o){ return {code:o.code, task:o.task}; });
+            return { code: obj.code, task: obj.task||'', color: obj.color||'', store: obj.store || fromEntry.store || null };
+          }).filter(function(o){ return o.store === storeForCopy; }).map(function(o){ var r = {code:o.code, task:o.task}; if(o.color) r.color = o.color; return r; });
           if(shiftsHere.length === 0) continue;
           applyStoreShiftsForDay(fresh, scheduleKey(e.maNV, toDate), storeForCopy, shiftsHere);
           copyCount++;
@@ -7863,6 +7980,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
 
     await mutateStateKeySafe('cashierAssign', function(fresh){
+      Object.keys(fresh).forEach(function(k){
+        var datePart = k.split('|')[1];
+        if(datePart && datePart < cutoffISO) delete fresh[k];
+      });
+    });
+
+    await mutateStateKeySafe('openingHours', function(fresh){
       Object.keys(fresh).forEach(function(k){
         var datePart = k.split('|')[1];
         if(datePart && datePart < cutoffISO) delete fresh[k];
