@@ -5898,7 +5898,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     };
   }
   function buildSalaryRows(){
-    return state.employees.map(buildSalaryRow);
+    // Bảng Phân bổ lương không hiện nhân viên đã Nghỉ việc (tính công vẫn dùng buildSalaryRow riêng nên không ảnh hưởng)
+    return state.employees.filter(function(e){ return e.trangThai !== 'Nghỉ việc'; }).map(buildSalaryRow);
   }
   function getFilteredSalaryRows(){
     var rows = buildSalaryRows();
