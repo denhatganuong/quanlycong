@@ -2216,6 +2216,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var TASK_STORAGE_KEY = "qlns_tasks_v1";
   var LOCK_STORAGE_KEY = "qlns_sched_locks_v1";
   var HOLIDAY_STORAGE_KEY = "qlns_holidays_v1";
+  var CASHIER_REQUIRED_FROM = '2026-11-02'; // Từ tuần này trở đi mới bắt buộc khai báo Thu ngân ca 1 / ca 2 khi chốt công (tuần cũ chốt lại không bị chặn)
   var COPY_WEEK_PASSWORD = "0000"; // Mật khẩu để sao chép lịch tuần trước — đổi trực tiếp giá trị này nếu muốn dùng mật khẩu khác.
   var UNLOCK_PASSWORD = "0000"; // Mật khẩu mở lại lịch đã chốt công — đổi trực tiếp giá trị này trong file nếu muốn dùng mật khẩu khác.
   var state = {
@@ -6414,7 +6415,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(allowedStores && allowedStores.indexOf(state.scheduleSelectedStore) === -1){
       state.scheduleSelectedStore = storeList[0].tenCuaHang;
     }
-    var prevWeekStart = addDaysISO(getWeekStartISO(todayISO()), -7);
+    // Chấm đỏ: trong THÁNG đang xem còn ít nhất 1 tuần đã qua mà chưa chốt công. (Tuần chưa kết thúc chưa tính.)
+    var viewWeek = state.scheduleWeekStart || getWeekStartISO(todayISO());
+    var midDay = isoToDate(addDaysISO(viewWeek, 3));
+    var monthFirst = dateToISO(new Date(midDay.getFullYear(), midDay.getMonth(), 1));
+    var monthLast = dateToISO(new Date(midDay.getFullYear(), midDay.getMonth() + 1, 0));
+    var monthWeeks = [], wk = getWeekStartISO(monthFirst), todayStr = todayISO();
+    while(wk <= monthLast){ if(addDaysISO(wk, 6) < todayStr) monthWeeks.push(wk); wk = addDaysISO(wk, 7); }
+    var monthLabel = (midDay.getMonth() + 1) + '/' + midDay.getFullYear();
     var searchQ = (document.getElementById('scheduleStoreSearch').value || '').trim().toLowerCase();
     var sorted = storeList.slice().sort(function(a,b){ return (a.tenCuaHang||'').localeCompare(b.tenCuaHang||'', 'vi'); });
     if(searchQ){
@@ -6427,8 +6435,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     list.innerHTML = sorted.map(function(s){
       var count = getStoreEmployees(s.tenCuaHang).filter(function(e){ return !isHiddenForWeek(e.maNV, state.scheduleWeekStart || getWeekStartISO(todayISO())); }).length;
       var active = s.tenCuaHang === state.scheduleSelectedStore;
-      var unlockedPrevWeek = !isWeekLocked(s.tenCuaHang, prevWeekStart);
-      var warnDot = unlockedPrevWeek ? '<span class="store-warn-dot"></span>' : '';
+      var unlockedWeeks = monthWeeks.filter(function(w){ return !isWeekLocked(s.tenCuaHang, w); });
+      var warnDot = unlockedWeeks.length
+        ? '<span class="store-warn-dot" title="Tháng '+monthLabel+' còn '+unlockedWeeks.length+' tuần chưa chốt công: '+unlockedWeeks.map(function(w){ return formatDDMM(w); }).join(', ')+'"></span>'
+        : '';
       return '<button type="button" class="schedule-store-item'+(active?' active':'')+'" data-store="'+escapeHtml(s.tenCuaHang)+'">' +
         warnDot +
         escapeHtml(s.tenCuaHang) +
@@ -6853,14 +6863,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   document.getElementById('scheduleWeekPrev').addEventListener('click', function(){
     state.scheduleWeekStart = addDaysISO(state.scheduleWeekStart || getWeekStartISO(todayISO()), -7);
+    renderScheduleSidebar();
     renderScheduleMain();
   });
   document.getElementById('scheduleWeekNext').addEventListener('click', function(){
     state.scheduleWeekStart = addDaysISO(state.scheduleWeekStart || getWeekStartISO(todayISO()), 7);
+    renderScheduleSidebar();
     renderScheduleMain();
   });
   document.getElementById('scheduleWeekToday').addEventListener('click', function(){
     state.scheduleWeekStart = getWeekStartISO(todayISO());
+    renderScheduleSidebar();
     renderScheduleMain();
   });
 
@@ -7497,7 +7510,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(!state.scheduleSelectedStore) return;
     var weekDates = [];
     for(var i=0;i<7;i++) weekDates.push(addDaysISO(state.scheduleWeekStart, i));
-    var missingDays = weekDates.filter(function(d){
+    var missingDays = (state.scheduleWeekStart < CASHIER_REQUIRED_FROM) ? [] : weekDates.filter(function(d){
       var rec = state.cashierAssign[cashierKey(state.scheduleSelectedStore, d)] || {};
       return !rec.ca1 || !rec.ca2;
     });
@@ -8031,49 +8044,29 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   async function pruneOldScheduleData(){
     var today = new Date();
     var cutoff = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    var cutoffISO = cutoff.toISOString().slice(0, 10);
-
-    await saveScheduleMutation(function(fresh){
+    var cutoffISO = dateToISO(cutoff); // dùng ngày GIỜ ĐỊA PHƯƠNG (toISOString bị lệch 1 ngày ở UTC+7 làm xóa nhầm tuần đã chốt)
+    // Khoá theo "cửa hàng|ngày": xoá khi ngày < mốc.
+    function pruneByDate(fresh){
       Object.keys(fresh).forEach(function(k){
         var datePart = k.split('|')[1];
         if(datePart && datePart < cutoffISO) delete fresh[k];
       });
-    });
-
-    await mutateStateKeySafe('scheduleLocks', function(fresh){
+    }
+    // Khoá theo "cửa hàng|ngày bắt đầu tuần" (chốt công, mượn nhân sự, nhật ký chốt):
+    // chỉ xoá khi CẢ TUẦN đã nằm trước mốc — tuần đang vắt qua mốc (vd 29/09–05/10) phải giữ lại để tính lương tháng sau.
+    function pruneByWeek(fresh){
       Object.keys(fresh).forEach(function(k){
         var datePart = k.split('|')[1];
-        if(datePart && datePart < cutoffISO) delete fresh[k];
+        if(datePart && addDaysISO(datePart, 6) < cutoffISO) delete fresh[k];
       });
-    });
+    }
 
-    await mutateStateKeySafe('borrowedStaff', function(fresh){
-      Object.keys(fresh).forEach(function(k){
-        var datePart = k.split('|')[1];
-        if(datePart && datePart < cutoffISO) delete fresh[k];
-      });
-    });
-
-    await mutateStateKeySafe('cashierAssign', function(fresh){
-      Object.keys(fresh).forEach(function(k){
-        var datePart = k.split('|')[1];
-        if(datePart && datePart < cutoffISO) delete fresh[k];
-      });
-    });
-
-    await mutateStateKeySafe('openingHours', function(fresh){
-      Object.keys(fresh).forEach(function(k){
-        var datePart = k.split('|')[1];
-        if(datePart && datePart < cutoffISO) delete fresh[k];
-      });
-    });
-
-    await mutateStateKeySafe('scheduleLockLog', function(fresh){
-      Object.keys(fresh).forEach(function(k){
-        var datePart = k.split('|')[1];
-        if(datePart && datePart < cutoffISO) delete fresh[k];
-      });
-    });
+    await saveScheduleMutation(pruneByDate);
+    await mutateStateKeySafe('scheduleLocks', pruneByWeek);
+    await mutateStateKeySafe('borrowedStaff', pruneByWeek);
+    await mutateStateKeySafe('cashierAssign', pruneByDate);
+    await mutateStateKeySafe('openingHours', pruneByDate);
+    await mutateStateKeySafe('scheduleLockLog', pruneByWeek);
 
     renderAll();
     renderViewContent(state.currentView);
