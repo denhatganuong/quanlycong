@@ -195,8 +195,9 @@
   }
   .timeline-inner.locked .timeline-block{pointer-events:none;opacity:.75;cursor:not-allowed;}
 
-  .sched-legend{display:flex;flex-wrap:wrap;gap:0;margin:12px 0 4px;}
-  .sched-legend-chip{color:#fff;font-size:12.5px;font-weight:600;padding:9px 22px;text-align:center;letter-spacing:.01em;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .sched-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 2px 4px;}
+  .sched-legend-title{font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-right:4px;}
+  .sched-legend-chip{color:#fff;font-size:12.5px;font-weight:650;padding:7px 16px;border-radius:999px;text-align:center;letter-spacing:.01em;box-shadow:0 1px 2px rgba(0,0,0,.15);-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .sched-table{width:100%;border-collapse:collapse;min-width:1000px;}
   .sched-table thead th{
     text-align:center;font-size:11.5px;font-weight:650;color:var(--ink-soft);
@@ -224,7 +225,7 @@
   .sched-table.locked .sched-open-time{pointer-events:none;opacity:.55;}
   .sched-table thead th{vertical-align:top;}
   .hrow{height:30px;display:flex;align-items:center;justify-content:center;margin-top:6px;}
-  .hrow.hday{height:24px;margin-top:0;}
+  .hrow.hday{height:24px;margin-top:0;gap:6px;white-space:nowrap;}
   .hrow.hlbl{justify-content:flex-start;font-size:11px;font-weight:700;color:var(--ink-soft);}
   .req-star{color:#d92d20;margin-left:2px;}
   .sched-tn-select:not(.filled){border-color:#d92d20;background:#fff6f5;}
@@ -1058,10 +1059,11 @@
             </div>
           </div>
 
-          <div class="sched-legend" aria-label="Chú thích công việc">
-            <span class="sched-legend-chip" style="background:#ff0000;">CHẾ BIẾN</span>
-            <span class="sched-legend-chip" style="background:#0070c0;">THU NGÂN</span>
-            <span class="sched-legend-chip" style="background:#375623;">BÁN HÀNG - PHỤC VỤ</span>
+          <div class="sched-legend" aria-label="Vai trò công việc theo màu">
+            <span class="sched-legend-title">Vai trò công việc theo màu:</span>
+            <span class="sched-legend-chip" style="background:#e11d1d;">Chế biến</span>
+            <span class="sched-legend-chip" style="background:#0070c0;">Thu ngân - Bán hàng</span>
+            <span class="sched-legend-chip" style="background:#2f6b2f;">Phục vụ - Bán hàng</span>
           </div>
 
           <div class="table-card" id="timelineCard" style="margin-top:18px;display:none;">
@@ -1992,7 +1994,7 @@
             <div class="ca-picker-panel" id="scheduleCellCa1Panel"></div>
             <select id="scheduleCellCa1" class="visually-hidden"></select>
           </div>
-          <div class="ca-color-row" data-col="scheduleCellCa1"><span class="ca-color-lbl">Màu ca:</span><button type="button" class="ca-color-chip" data-color="cb" style="background:#ff0000;" title="Chế biến">Chế biến</button><button type="button" class="ca-color-chip" data-color="tn" style="background:#0070c0;" title="Thu ngân">Thu ngân</button><button type="button" class="ca-color-chip" data-color="bh" style="background:#375623;" title="Bán hàng - Phục vụ">Bán hàng</button></div>
+          <div class="ca-color-row" data-col="scheduleCellCa1"><span class="ca-color-lbl">Màu ca:</span><button type="button" class="ca-color-chip" data-color="cb" style="background:#e11d1d;" title="Chế biến">Chế biến</button><button type="button" class="ca-color-chip" data-color="tn" style="background:#0070c0;" title="Thu ngân - Bán hàng">Thu ngân - Bán hàng</button><button type="button" class="ca-color-chip" data-color="bh" style="background:#2f6b2f;" title="Phục vụ - Bán hàng">Phục vụ - Bán hàng</button></div>
         </div>
         <div class="form-field">
           <label><span class="cat-dot tag-cat2"></span> Ca 2 (tuỳ chọn)</label>
@@ -2001,7 +2003,7 @@
             <div class="ca-picker-panel" id="scheduleCellCa2Panel"></div>
             <select id="scheduleCellCa2" class="visually-hidden"></select>
           </div>
-          <div class="ca-color-row" data-col="scheduleCellCa2"><span class="ca-color-lbl">Màu ca:</span><button type="button" class="ca-color-chip" data-color="cb" style="background:#ff0000;" title="Chế biến">Chế biến</button><button type="button" class="ca-color-chip" data-color="tn" style="background:#0070c0;" title="Thu ngân">Thu ngân</button><button type="button" class="ca-color-chip" data-color="bh" style="background:#375623;" title="Bán hàng - Phục vụ">Bán hàng</button></div>
+          <div class="ca-color-row" data-col="scheduleCellCa2"><span class="ca-color-lbl">Màu ca:</span><button type="button" class="ca-color-chip" data-color="cb" style="background:#e11d1d;" title="Chế biến">Chế biến</button><button type="button" class="ca-color-chip" data-color="tn" style="background:#0070c0;" title="Thu ngân - Bán hàng">Thu ngân - Bán hàng</button><button type="button" class="ca-color-chip" data-color="bh" style="background:#2f6b2f;" title="Phục vụ - Bán hàng">Phục vụ - Bán hàng</button></div>
         </div>
         <div class="form-field">
           <label><span class="cat-dot tag-catsp"></span> Ca đặc biệt (tuỳ chọn)</label>
@@ -2010,7 +2012,7 @@
             <div class="ca-picker-panel" id="scheduleCellCa3Panel"></div>
             <select id="scheduleCellCa3" class="visually-hidden"></select>
           </div>
-          <div class="ca-color-row" data-col="scheduleCellCa3"><span class="ca-color-lbl">Màu ca:</span><button type="button" class="ca-color-chip" data-color="cb" style="background:#ff0000;" title="Chế biến">Chế biến</button><button type="button" class="ca-color-chip" data-color="tn" style="background:#0070c0;" title="Thu ngân">Thu ngân</button><button type="button" class="ca-color-chip" data-color="bh" style="background:#375623;" title="Bán hàng - Phục vụ">Bán hàng</button></div>
+          <div class="ca-color-row" data-col="scheduleCellCa3"><span class="ca-color-lbl">Màu ca:</span><button type="button" class="ca-color-chip" data-color="cb" style="background:#e11d1d;" title="Chế biến">Chế biến</button><button type="button" class="ca-color-chip" data-color="tn" style="background:#0070c0;" title="Thu ngân - Bán hàng">Thu ngân - Bán hàng</button><button type="button" class="ca-color-chip" data-color="bh" style="background:#2f6b2f;" title="Phục vụ - Bán hàng">Phục vụ - Bán hàng</button></div>
         </div>
       </div>
       <p id="scheduleCellError" style="color:var(--danger);font-size:12.5px;margin:12px 0 0;display:none;">⚠ Chỉ được chọn tối đa 2 ca cùng lúc trong 1 ngày.</p>
@@ -6450,6 +6452,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Thu ngân ca 1 / ca 2 của cửa hàng theo ngày: state.cashierAssign[store|date] = { ca1: maNV, ca2: maNV }
   function cashierKey(store, date){ return store + '|' + date; }
   var DEFAULT_OPEN_TIME = '08:30';
+  var DEFAULT_CLOSE_TIME = '22:00';
+  function closeKey(store, date){ return store + '|' + date + '|close'; }
   function shortName(full){
     var parts = String(full || '').trim().split(/\s+/);
     return parts[parts.length - 1] || '';
@@ -6505,14 +6509,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var headHtml = store
       ? '<th class="sched-emp-head"><div class="hrow hday" style="justify-content:flex-start;">'+firstColLabel+'</div>' +
           '<div class="hrow hlbl">Giờ mở cửa</div>' +
+          '<div class="hrow hlbl">Giờ đóng cửa</div>' +
           '<div class="hrow hlbl">Thu ngân ca 1 <span class="req-star">*</span></div>' +
           '<div class="hrow hlbl">Thu ngân ca 2 <span class="req-star">*</span></div></th>'
       : '<th class="sched-emp-head">'+firstColLabel+'</th>';
     weekDates.forEach(function(d, idx){
       var openT = (store && state.openingHours[cashierKey(store, d)]) || DEFAULT_OPEN_TIME;
+      var closeT = (store && state.openingHours[closeKey(store, d)]) || DEFAULT_CLOSE_TIME;
       headHtml += '<th class="sched-day"><div class="hrow hday"><span class="dow">'+WEEKDAY_LABELS[idx]+'</span><span class="date">'+formatDDMM(d)+'</span>' +
         '<button type="button" class="sched-day-copy-btn" data-date="'+d+'" title="Sao chép lịch ngày này sang ngày khác">⧉</button></div>' +
         (store ? '<div class="hrow"><input type="time" class="sched-open-time'+(openT !== DEFAULT_OPEN_TIME ? ' changed' : '')+'" data-date="'+d+'" value="'+escapeHtml(openT)+'" title="Giờ mở cửa ngày này (mặc định '+DEFAULT_OPEN_TIME+')"></div>' +
+          '<div class="hrow"><input type="time" class="sched-open-time sched-close-time'+(closeT !== DEFAULT_CLOSE_TIME ? ' changed' : '')+'" data-date="'+d+'" data-kind="close" value="'+escapeHtml(closeT)+'" title="Giờ đóng cửa ngày này (mặc định '+DEFAULT_CLOSE_TIME+')"></div>' +
           '<div class="hrow">'+buildCashierSelectHtml(store, d, 'ca1', 'Thu ngân ca 1', roster || [])+'</div>' +
           '<div class="hrow">'+buildCashierSelectHtml(store, d, 'ca2', 'Thu ngân ca 2', roster || [])+'</div>' : '') +
       '</th>';
@@ -6860,7 +6867,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ---------- Schedule: cell assign modal ---------- */
   var scheduleCellOverlay = document.getElementById('scheduleCellOverlay');
   var SCHEDULE_CAT_SELECT_IDS = ['scheduleCellCa1', 'scheduleCellCa2', 'scheduleCellCa3'];
-  var SHIFT_COLOR_HEX = { cb: '#ff0000', tn: '#0070c0', bh: '#375623' };
+  var SHIFT_COLOR_HEX = { cb: '#e11d1d', tn: '#0070c0', bh: '#2f6b2f' };
   var SHIFT_COLOR_DEFAULT = '#000000';
   function shiftColorHex(c){ return SHIFT_COLOR_HEX[c] || SHIFT_COLOR_DEFAULT; }
   var cellColors = { scheduleCellCa1: '', scheduleCellCa2: '', scheduleCellCa3: '' };
@@ -7320,10 +7327,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         renderScheduleMain();
         return;
       }
-      var oStore = state.scheduleSelectedStore, oDate = tin.dataset.date, oVal = tin.value || DEFAULT_OPEN_TIME;
+      var isClose = tin.dataset.kind === 'close';
+      var defT = isClose ? DEFAULT_CLOSE_TIME : DEFAULT_OPEN_TIME;
+      var oStore = state.scheduleSelectedStore, oDate = tin.dataset.date, oVal = tin.value || defT;
       await mutatePatchable('openingHours', function(fresh){
-        var k = cashierKey(oStore, oDate);
-        if(oVal === DEFAULT_OPEN_TIME) delete fresh[k]; else fresh[k] = oVal;
+        var k = isClose ? closeKey(oStore, oDate) : cashierKey(oStore, oDate);
+        if(oVal === defT) delete fresh[k]; else fresh[k] = oVal;
       });
       renderScheduleMain();
       return;
