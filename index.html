@@ -222,6 +222,12 @@
   .sched-open-time{display:block;width:100%;min-width:92px;max-width:130px;margin:2px auto 0;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--ink);font-family:inherit;}
   .sched-open-time.changed{background:var(--gold-soft);border-color:var(--gold);font-weight:700;}
   .sched-table.locked .sched-open-time{pointer-events:none;opacity:.55;}
+  .sched-table thead th{vertical-align:top;}
+  .hrow{height:30px;display:flex;align-items:center;justify-content:center;margin-top:6px;}
+  .hrow.hday{height:24px;margin-top:0;}
+  .hrow.hlbl{justify-content:flex-start;font-size:11px;font-weight:700;color:var(--ink-soft);}
+  .req-star{color:#d92d20;margin-left:2px;}
+  .sched-tn-select:not(.filled){border-color:#d92d20;background:#fff6f5;}
   .sched-tn-label{font-size:9.5px;font-weight:700;color:var(--ink-soft);margin-top:6px;text-align:left;max-width:130px;margin-left:auto;margin-right:auto;}
   .sched-tn-label + .sched-tn-select{margin-top:2px;}
   .sched-tn-select{display:block;width:100%;min-width:92px;max-width:130px;margin:4px auto 0;font-size:10.5px;padding:3px 2px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--ink);font-family:inherit;}
@@ -2061,6 +2067,27 @@
 </div>
 
 <!-- Unlock schedule (nhập mật khẩu để mở lại) -->
+<div class="overlay" id="copyWeekPassOverlay">
+  <div class="modal modal-small" role="alertdialog" aria-modal="true" aria-labelledby="copyWeekPassTitle">
+    <div class="modal-head">
+      <h2 id="copyWeekPassTitle">Sao chép lịch tuần trước</h2>
+      <button class="close-x" id="copyWeekPassClose" aria-label="Đóng">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="confirm-text" style="margin-bottom:12px;">Nhập mật khẩu để sao chép toàn bộ lịch tuần trước vào tuần đang xem.</p>
+      <div class="form-field full">
+        <label for="copyWeekPassInput">Mật khẩu</label>
+        <input type="password" id="copyWeekPassInput" autocomplete="off">
+        <div class="err" id="e_copyWeekPass"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="copyWeekPassCancel">Hủy</button>
+      <button class="btn btn-primary" id="copyWeekPassConfirm">Sao chép</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="unlockScheduleOverlay">
   <div class="modal modal-small" role="alertdialog" aria-modal="true" aria-labelledby="unlockScheduleTitle">
     <div class="modal-head">
@@ -2187,6 +2214,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var TASK_STORAGE_KEY = "qlns_tasks_v1";
   var LOCK_STORAGE_KEY = "qlns_sched_locks_v1";
   var HOLIDAY_STORAGE_KEY = "qlns_holidays_v1";
+  var COPY_WEEK_PASSWORD = "0000"; // Mật khẩu để sao chép lịch tuần trước — đổi trực tiếp giá trị này nếu muốn dùng mật khẩu khác.
   var UNLOCK_PASSWORD = "0000"; // Mật khẩu mở lại lịch đã chốt công — đổi trực tiếp giá trị này trong file nếu muốn dùng mật khẩu khác.
   var state = {
     employees: [],
@@ -6446,8 +6474,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var ce = state.employees.find(function(x){ return x.maNV === cur; });
       opts += opt(cur, ce ? ce.hoTen : cur, ' (không thuộc DS)', true);
     }
-    return '<div class="sched-tn-label">'+label+'</div>' +
-      '<select class="sched-tn-select'+(cur?' filled':'')+'" data-date="'+date+'" data-slot="'+slot+'" title="'+label+'">'+opts+'</select>';
+    return '<select class="sched-tn-select'+(cur?' filled':'')+'" data-date="'+date+'" data-slot="'+slot+'" title="'+label+'">'+opts+'</select>';
   }
   (function(){
     var head = document.getElementById('scheduleStaffHeadRow');
@@ -6475,13 +6502,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return { per: per, total: total };
   }
   function buildScheduleHeadHtml(weekDates, firstColLabel, store, roster){
-    var headHtml = '<th class="sched-emp-head">'+firstColLabel+'</th>';
+    var headHtml = store
+      ? '<th class="sched-emp-head"><div class="hrow hday" style="justify-content:flex-start;">'+firstColLabel+'</div>' +
+          '<div class="hrow hlbl">Giờ mở cửa</div>' +
+          '<div class="hrow hlbl">Thu ngân ca 1 <span class="req-star">*</span></div>' +
+          '<div class="hrow hlbl">Thu ngân ca 2 <span class="req-star">*</span></div></th>'
+      : '<th class="sched-emp-head">'+firstColLabel+'</th>';
     weekDates.forEach(function(d, idx){
       var openT = (store && state.openingHours[cashierKey(store, d)]) || DEFAULT_OPEN_TIME;
-      headHtml += '<th class="sched-day"><div class="sched-day-line"><span class="dow">'+WEEKDAY_LABELS[idx]+'</span><span class="date">'+formatDDMM(d)+'</span>' +
+      headHtml += '<th class="sched-day"><div class="hrow hday"><span class="dow">'+WEEKDAY_LABELS[idx]+'</span><span class="date">'+formatDDMM(d)+'</span>' +
         '<button type="button" class="sched-day-copy-btn" data-date="'+d+'" title="Sao chép lịch ngày này sang ngày khác">⧉</button></div>' +
-        (store ? '<div class="sched-open-label">Giờ mở cửa</div><input type="time" class="sched-open-time'+(openT !== DEFAULT_OPEN_TIME ? ' changed' : '')+'" data-date="'+d+'" value="'+escapeHtml(openT)+'" title="Giờ mở cửa ngày này (mặc định '+DEFAULT_OPEN_TIME+')">' : '') +
-        (store ? buildCashierSelectHtml(store, d, 'ca1', 'Thu ngân ca 1', roster || []) + buildCashierSelectHtml(store, d, 'ca2', 'Thu ngân ca 2', roster || []) : '') +
+        (store ? '<div class="hrow"><input type="time" class="sched-open-time'+(openT !== DEFAULT_OPEN_TIME ? ' changed' : '')+'" data-date="'+d+'" value="'+escapeHtml(openT)+'" title="Giờ mở cửa ngày này (mặc định '+DEFAULT_OPEN_TIME+')"></div>' +
+          '<div class="hrow">'+buildCashierSelectHtml(store, d, 'ca1', 'Thu ngân ca 1', roster || [])+'</div>' +
+          '<div class="hrow">'+buildCashierSelectHtml(store, d, 'ca2', 'Thu ngân ca 2', roster || [])+'</div>' : '') +
       '</th>';
     });
     headHtml += '<th class="sched-total-head">TỔNG GIỜ/TUẦN</th>';
@@ -7383,7 +7416,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   });
 
   /* ---------- Schedule: copy previous week ---------- */
-  document.getElementById('btnCopyPrevWeek').addEventListener('click', async function(){
+  var copyWeekPassOverlay = document.getElementById('copyWeekPassOverlay');
+  function closeCopyWeekPass(){ copyWeekPassOverlay.classList.remove('show'); }
+  document.getElementById('btnCopyPrevWeek').addEventListener('click', function(){
+    if(!state.scheduleSelectedStore) return;
+    if(isWeekLocked(state.scheduleSelectedStore, state.scheduleWeekStart)){
+      showToast('Tuần này đã chốt công, không thể sao chép vào.', true);
+      return;
+    }
+    document.getElementById('copyWeekPassInput').value = '';
+    document.getElementById('e_copyWeekPass').textContent = '';
+    copyWeekPassOverlay.classList.add('show');
+    setTimeout(function(){ document.getElementById('copyWeekPassInput').focus(); }, 50);
+  });
+  document.getElementById('copyWeekPassClose').addEventListener('click', closeCopyWeekPass);
+  document.getElementById('copyWeekPassCancel').addEventListener('click', closeCopyWeekPass);
+  copyWeekPassOverlay.addEventListener('click', function(ev){ if(ev.target === copyWeekPassOverlay) closeCopyWeekPass(); });
+  document.getElementById('copyWeekPassInput').addEventListener('keydown', function(ev){ if(ev.key === 'Enter') document.getElementById('copyWeekPassConfirm').click(); });
+  document.getElementById('copyWeekPassConfirm').addEventListener('click', function(){
+    if(document.getElementById('copyWeekPassInput').value !== COPY_WEEK_PASSWORD){
+      document.getElementById('e_copyWeekPass').textContent = 'Mật khẩu không đúng.';
+      return;
+    }
+    closeCopyWeekPass();
+    doCopyPrevWeek();
+  });
+  async function doCopyPrevWeek(){
     if(!state.scheduleSelectedStore) return;
     if(isWeekLocked(state.scheduleSelectedStore, state.scheduleWeekStart)){
       showToast('Tuần này đã chốt công, không thể sao chép vào.', true);
@@ -7422,7 +7480,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       showToast('Tuần trước chưa có lịch nào để sao chép.', true);
       return;
     }
-  });
+  }
 
   /* ---------- Schedule: lock (Chốt công) ---------- */
   var lockScheduleOverlay = document.getElementById('lockScheduleOverlay');
@@ -7430,6 +7488,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(!state.scheduleSelectedStore) return;
     var weekDates = [];
     for(var i=0;i<7;i++) weekDates.push(addDaysISO(state.scheduleWeekStart, i));
+    var missingDays = weekDates.filter(function(d){
+      var rec = state.cashierAssign[cashierKey(state.scheduleSelectedStore, d)] || {};
+      return !rec.ca1 || !rec.ca2;
+    });
+    if(missingDays.length){
+      showToast('Chưa thể chốt công: cần chọn đủ Thu ngân ca 1 và Thu ngân ca 2 cho các ngày ' + missingDays.map(formatDDMM).join(', ') + '.', true);
+      return;
+    }
     document.getElementById('lockScheduleText').textContent =
       'Bạn có xác nhận chốt công cho ' + state.scheduleSelectedStore + ', tuần ' + formatDDMM(weekDates[0]) + ' - ' + formatDDMM(weekDates[6]) + ' không?';
     lockScheduleOverlay.classList.add('show');
