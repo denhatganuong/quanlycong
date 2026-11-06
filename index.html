@@ -6668,7 +6668,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       staffTbody.innerHTML = buildScheduleRowsHtml(allEmployees, weekDates, state.scheduleSelectedStore);
     }
 
+    fitScheduleScrollHeight();
     renderTimelineBody(weekDates);
+  }
+  // Mỗi màn hình hiện đúng 7 nhân viên; cửa hàng đông hơn thì cuộn dọc trong khung bảng.
+  var SCHEDULE_VISIBLE_ROWS = 7;
+  function fitScheduleScrollHeight(){
+    var table = document.getElementById('scheduleStaffTable');
+    var wrap = table && table.parentElement;
+    if(!wrap) return;
+    var rows = table.tBodies[0] ? table.tBodies[0].rows : [];
+    if(rows.length <= SCHEDULE_VISIBLE_ROWS){ wrap.style.maxHeight = 'none'; wrap.style.overflowY = 'visible'; return; }
+    var h = table.tHead ? table.tHead.offsetHeight : 0;
+    for(var i = 0; i < SCHEDULE_VISIBLE_ROWS; i++) h += rows[i].offsetHeight;
+    wrap.style.maxHeight = (h + 18) + 'px'; // +18: thanh cuộn ngang
+    wrap.style.overflowY = 'auto';
   }
 
   document.getElementById('scheduleStaffTbody').addEventListener('click', function(ev){
