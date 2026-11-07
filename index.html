@@ -6306,8 +6306,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function isHiddenForWeek(maNV, weekStart){
     // Nhân viên có trạng thái hồ sơ "Nghỉ việc" không hiện trong xếp lịch
     // (trừ tuần cũ đã có ca/OFF ghi nhận, để giữ nguyên lịch sử).
+    // Tuần nào đã có ca/OFF của người đó thì LUÔN hiện để thấy và chỉnh sửa được — tránh trường hợp Tính công có giờ công
+    // nhưng xếp lịch không thấy người đó (do bị ẩn vì đã nghỉ việc).
+    if(hasScheduleInWeek(maNV, weekStart)) return false;
     var emp = state.employees.find(function(x){ return x.maNV === maNV; });
-    if(emp && emp.trangThai === 'Nghỉ việc' && !hasScheduleInWeek(maNV, weekStart)) return true;
+    if(emp && emp.trangThai === 'Nghỉ việc') return true;
     var rec = getEmployeeScheduleStatus(maNV);
     if(!rec) return false;
     return weekStart > rec.effectiveWeek;
