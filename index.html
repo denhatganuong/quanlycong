@@ -1034,6 +1034,7 @@
               <button class="btn btn-ghost btn-sm" id="scheduleWeekToday">Tuần này</button>
               <button class="btn btn-ghost btn-sm" id="btnCopyPrevWeek" title="Sao chép toàn bộ lịch của tuần liền trước vào tuần đang xem">📋 Sao chép lịch tuần trước</button>
               <button class="btn btn-primary btn-sm" id="btnBorrowStaff">+ Mượn nhân sự</button>
+              <button class="btn btn-ghost btn-sm" id="btnExportScheduleImg" title="Xuất toàn bộ lịch tuần đang xem (tất cả nhân viên) ra file hình ảnh PNG">🖼 Xuất hình ảnh</button>
               <span class="lock-badge" id="scheduleLockBadge" style="display:none;">
                 🔒 Đã chốt công
                 <button type="button" id="btnUnlockSchedule" style="background:none;border:none;color:var(--brand-dark);font-weight:700;text-decoration:underline;cursor:pointer;font-size:12px;margin-left:4px;font-family:inherit;">Mở lại</button>
@@ -6303,6 +6304,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     return false;
   }
+  // Sao chép lịch (tuần/ngày) không chép ca của nhân viên đã Nghỉ việc
+  function isResignedEmployee(e){ return !!e && e.trangThai === 'Nghỉ việc'; }
   function isHiddenForWeek(maNV, weekStart){
     // Nhân viên có trạng thái hồ sơ "Nghỉ việc" không hiện trong xếp lịch
     // (trừ tuần cũ đã có ca/OFF ghi nhận, để giữ nguyên lịch sử).
@@ -6674,6 +6677,183 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     fitScheduleScrollHeight();
     renderTimelineBody(weekDates);
   }
+
+  /* ---------- Xuất lịch tuần ra HÌNH ẢNH (PNG) — toàn bộ nhân viên của cửa hàng ở tuần đang xem ---------- */
+  function exportScheduleImage(){
+    var store = state.scheduleSelectedStore;
+    if(!store){ showToast('Hãy chọn cửa hàng trước.', true); return; }
+    var weekStart = state.scheduleWeekStart || getWeekStartISO(todayISO());
+    var weekDates = []; for(var i = 0; i < 7; i++) weekDates.push(addDaysISO(weekStart, i));
+    var storeObj = state.stores.find(function(x){ return x.tenCuaHang === store; });
+    var mgr = storeObj ? state.employees.find(function(x){ return x.maNV === storeObj.quanLyTrucTiep; }) : null;
+    var ownStaff = getStoreEmployees(store).filter(function(e){ return !isHiddenForWeek(e.maNV, weekStart); });
+    var borrowed = getBorrowedStaffList(store, weekStart).filter(function(e){ return !isHiddenForWeek(e.maNV, weekStart); });
+    var staff = ownStaff.concat(borrowed).sort(function(a,b){ return (a.hoTen||'').localeCompare(b.hoTen||'', 'vi'); });
+    var locked = isWeekLocked(store, weekStart);
+    var lockRec = state.scheduleLockLog[getBorrowKey(store, weekStart)];
+
+    var FONT = '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+    var SC = 2;                       // độ nét x2
+    var PAD = 24, W_NAME = 230, W_DAY = 132, W_TOT = 96, W_TN = 84;
+    var GAP = 6, CHIP_H = 34, ROW_PAD = 10;
+    var W = PAD * 2 + W_NAME + W_DAY * 7 + W_TOT + W_TN;
+
+    // ---- đo chiều cao từng hàng ----
+    var rows = staff.map(function(e){
+      var cells = weekDates.map(function(d){
+        var entry = getScheduleEntry(e.maNV, d);
+        if(entry && entry.off) return { t: 'off', h: 40 };
+        var all = getScheduleShiftObjects(e.maNV, d);
+        var here = all.filter(function(o){ return o.store === store; });
+        var others = {}; all.forEach(function(o){ if(o.store && o.store !== store) others[o.store] = true; });
+        var otherNames = Object.keys(others);
+        if(here.length === 0 && otherNames.length) return { t: 'else', h: 40 };
+        if(here.length === 0) return { t: 'empty', h: 40 };
+        return { t: 'shifts', shifts: here, other: otherNames, h: here.length * CHIP_H + (here.length - 1) * 4 + (otherNames.length ? 18 : 0) };
+      });
+      var h = Math.max(58, Math.max.apply(null, cells.map(function(c){ return c.h; })) + ROW_PAD * 2);
+      return { e: e, cells: cells, h: h };
+    });
+    var HEAD_TITLE = 62, HEAD_ROWS = 5, HEAD_ROW_H = 34, FOOT = 64;
+    var H = PAD + HEAD_TITLE + HEAD_ROWS * HEAD_ROW_H + rows.reduce(function(a, r){ return a + r.h; }, 0) + FOOT + PAD;
+
+    var cv = document.createElement('canvas');
+    cv.width = W * SC; cv.height = H * SC;
+    var g = cv.getContext('2d');
+    g.scale(SC, SC);
+    g.textBaseline = 'middle';
+
+    function rr(x, y, w, h, r){
+      g.beginPath(); g.moveTo(x + r, y); g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+      g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+      g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y); g.closePath();
+    }
+    function fit(text, maxW){
+      text = String(text == null ? '' : text);
+      if(g.measureText(text).width <= maxW) return text;
+      while(text.length > 1 && g.measureText(text + '…').width > maxW) text = text.slice(0, -1);
+      return text + '…';
+    }
+    function txt(text, x, y, font, color, align, maxW){
+      g.font = font; g.fillStyle = color; g.textAlign = align || 'left';
+      g.fillText(maxW ? fit(text, maxW) : text, x, y);
+    }
+
+    // nền
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+
+    // tiêu đề
+    var y = PAD;
+    txt(store, PAD, y + 16, '700 22px ' + FONT, '#1c2b24');
+    txt('Quản lý trực tiếp: ' + (mgr ? mgr.hoTen : '—'), PAD, y + 42, '500 13px ' + FONT, '#5b6b63');
+    txt('Tuần ' + formatDDMM(weekDates[0]) + ' - ' + formatDDMM(weekDates[6]) + '/' + weekDates[6].slice(0,4), W - PAD, y + 16, '700 18px ' + FONT, '#1c2b24', 'right');
+    var lockTxt = locked ? ('🔒 Đã chốt công' + (lockRec && lockRec.by ? ' · ' + lockRec.by : '') + (lockRec && lockRec.at ? ' · ' + new Date(lockRec.at).toLocaleString('vi-VN') : '')) : 'Chưa chốt công';
+    txt(lockTxt, W - PAD, y + 42, '500 12.5px ' + FONT, locked ? '#0f6b4f' : '#b45309', 'right');
+    y += HEAD_TITLE;
+
+    // khối tiêu đề bảng
+    var tableX = PAD, tableW = W - PAD * 2;
+    g.fillStyle = '#eef1ec'; g.fillRect(tableX, y, tableW, HEAD_ROWS * HEAD_ROW_H);
+    var dayX = function(i){ return PAD + W_NAME + i * W_DAY; };
+    var totX = PAD + W_NAME + W_DAY * 7, tnX = totX + W_TOT;
+    var labels = ['NHÂN VIÊN', 'Giờ mở cửa', 'Giờ đóng cửa', 'Thu ngân ca 1 *', 'Thu ngân ca 2 *'];
+    labels.forEach(function(lb, i){
+      txt(lb, PAD + 14, y + i * HEAD_ROW_H + HEAD_ROW_H / 2, (i === 0 ? '700 12px ' : '700 12px ') + FONT, i === 0 ? '#1c2b24' : '#5b6b63');
+    });
+    weekDates.forEach(function(d, idx){
+      var cx = dayX(idx) + W_DAY / 2;
+      txt(WEEKDAY_LABELS[idx] + '  ' + formatDDMM(d), cx, y + HEAD_ROW_H / 2, '700 13px ' + FONT, '#1c2b24', 'center');
+      var openT = state.openingHours[cashierKey(store, d)] || DEFAULT_OPEN_TIME;
+      var closeT = state.openingHours[closeKey(store, d)] || DEFAULT_CLOSE_TIME;
+      var rec = state.cashierAssign[cashierKey(store, d)] || {};
+      function nm(code){ var em = state.employees.find(function(x){ return x.maNV === code; }); return em ? shortName(em.hoTen) : ''; }
+      [[openT, openT !== DEFAULT_OPEN_TIME], [closeT, closeT !== DEFAULT_CLOSE_TIME], [nm(rec.ca1), !rec.ca1], [nm(rec.ca2), !rec.ca2]].forEach(function(it, k){
+        var bx = dayX(idx) + 8, by = y + (k + 1) * HEAD_ROW_H + 4, bw = W_DAY - 16, bh = HEAD_ROW_H - 8;
+        var isTime = k < 2;
+        var warn = (!isTime && it[1]);
+        rr(bx, by, bw, bh, 6);
+        g.fillStyle = warn ? '#fff1f0' : (isTime && it[1] ? '#fdf3d7' : '#ffffff'); g.fill();
+        g.lineWidth = 1; g.strokeStyle = warn ? '#e5484d' : (isTime && it[1] ? '#d9a21b' : '#c9d3cb'); g.stroke();
+        txt(it[0] || (isTime ? '' : '— Chưa chọn —'), cx, by + bh / 2, (isTime || it[0] ? '700 12.5px ' : '500 12px ') + FONT, warn ? '#b42318' : '#1c2b24', 'center', bw - 10);
+      });
+    });
+    txt('TỔNG GIỜ', totX + W_TOT / 2, y + HEAD_ROW_H / 2 - 7, '700 11px ' + FONT, '#0f6b4f', 'center');
+    txt('/ TUẦN', totX + W_TOT / 2, y + HEAD_ROW_H / 2 + 7, '700 11px ' + FONT, '#0f6b4f', 'center');
+    txt('CA THU', tnX + W_TN / 2, y + HEAD_ROW_H / 2 - 7, '700 11px ' + FONT, '#1c2b24', 'center');
+    txt('NGÂN', tnX + W_TN / 2, y + HEAD_ROW_H / 2 + 7, '700 11px ' + FONT, '#1c2b24', 'center');
+    var cw = cashierWeekCounts(store, weekDates);
+    txt(cw.total + '/14', tnX + W_TN / 2, y + HEAD_ROW_H + HEAD_ROW_H / 2, '700 13px ' + FONT, cw.total === 14 ? '#12663a' : '#b42318', 'center');
+    y += HEAD_ROWS * HEAD_ROW_H;
+
+    // các hàng nhân viên
+    var catColor = function(c){ return shiftColorHex(c); };
+    rows.forEach(function(r){
+      var e = r.e, top = y;
+      g.strokeStyle = '#e3e8e2'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(tableX, top + 0.5); g.lineTo(tableX + tableW, top + 0.5); g.stroke();
+      txt((e.hoTen || '—').toUpperCase(), PAD + 14, top + r.h / 2 - 12, '700 14px ' + FONT, '#1c2b24', 'left', W_NAME - 24);
+      txt((e.chucDanh || '—') + ' · ' + e.maNV, PAD + 14, top + r.h / 2 + 6, '500 12px ' + FONT, '#5b6b63', 'left', W_NAME - 24);
+      if(e._borrowed) txt('↔ Mượn từ ' + e._borrowedFrom, PAD + 14, top + r.h / 2 + 22, '600 10.5px ' + FONT, '#6d3fb3', 'left', W_NAME - 24);
+      r.cells.forEach(function(c, idx){
+        var cx0 = dayX(idx) + 8, cw0 = W_DAY - 16, cc = dayX(idx) + W_DAY / 2;
+        if(c.t === 'off'){
+          rr(cx0, top + (r.h - 40) / 2, cw0, 40, 8); g.fillStyle = '#e9edf0'; g.fill();
+          txt('OFF', cc, top + r.h / 2, '700 13px ' + FONT, '#5d6a74', 'center');
+        } else if(c.t === 'else'){
+          rr(cx0, top + (r.h - 40) / 2, cw0, 40, 8); g.fillStyle = '#fde8ea'; g.fill();
+          txt('ĐANG LÀM', cc, top + r.h / 2 - 7, '700 10px ' + FONT, '#b42318', 'center', cw0 - 8);
+          txt('Ở CH KHÁC', cc, top + r.h / 2 + 7, '700 10px ' + FONT, '#b42318', 'center', cw0 - 8);
+        } else if(c.t === 'shifts'){
+          var cy = top + (r.h - c.h) / 2;
+          c.shifts.forEach(function(o){
+            var sh = getShiftByCode(o.code);
+            rr(cx0, cy, cw0, CHIP_H, 7); g.fillStyle = catColor(o.color); g.fill();
+            txt(o.code, cc, cy + 11, '700 12px ' + FONT, '#ffffff', 'center', cw0 - 8);
+            if(sh) txt(sh.batDau + '-' + sh.ketThuc, cc, cy + 25, '500 10.5px ' + FONT, '#ffffff', 'center', cw0 - 8);
+            cy += CHIP_H + 4;
+          });
+          if(c.other.length) txt('+ ' + c.other.join(', '), cc, cy + 4, '600 9.5px ' + FONT, '#946200', 'center', cw0 - 4);
+        }
+      });
+      var totalH = computeWeeklyHours(e.maNV, weekDates), targetH = computeWeeklyTarget(e.chucDanh);
+      var under = targetH > 0 && totalH < targetH;
+      g.fillStyle = under ? '#fbefd6' : '#e3f3ec'; g.fillRect(totX, top + 1, W_TOT, r.h - 1);
+      txt(targetH > 0 ? (totalH + '/' + targetH) : (totalH + ' giờ'), totX + W_TOT / 2, top + r.h / 2, '700 13px ' + FONT, under ? '#9a5b00' : '#0f6b4f', 'center');
+      var n = cw.per[e.maNV] || 0;
+      txt(n ? String(n) : '—', tnX + W_TN / 2, top + r.h / 2, '700 14px ' + FONT, n ? '#12663a' : '#9aa7a0', 'center');
+      y += r.h;
+    });
+    g.strokeStyle = '#e3e8e2'; g.beginPath(); g.moveTo(tableX, y + 0.5); g.lineTo(tableX + tableW, y + 0.5); g.stroke();
+    // khung ngoài
+    rr(tableX, PAD + HEAD_TITLE, tableW, y - (PAD + HEAD_TITLE), 10); g.strokeStyle = '#d5ddd5'; g.lineWidth = 1; g.stroke();
+
+    // chú thích màu
+    y += 22;
+    txt('Vai trò công việc theo màu:', PAD, y + 14, '700 12.5px ' + FONT, '#5b6b63');
+    var lx = PAD + 190;
+    [['Chế biến', '#e11d1d'], ['Thu ngân - Bán hàng', '#0070c0'], ['Phục vụ - Bán hàng', '#2f6b2f']].forEach(function(it){
+      g.font = '700 12.5px ' + FONT;
+      var tw = g.measureText(it[0]).width + 32;
+      rr(lx, y, tw, 28, 14); g.fillStyle = it[1]; g.fill();
+      txt(it[0], lx + tw / 2, y + 14, '700 12.5px ' + FONT, '#ffffff', 'center');
+      lx += tw + 10;
+    });
+    txt('Xuất lúc ' + new Date().toLocaleString('vi-VN'), W - PAD, y + 14, '500 11px ' + FONT, '#9aa7a0', 'right');
+
+    cv.toBlob(function(blob){
+      if(!blob){ showToast('Không tạo được hình ảnh (hình quá lớn).', true); return; }
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      var safe = store.replace(/[đĐ]/g, function(c){ return c === 'đ' ? 'd' : 'D'; }).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\-]+/g, '_');
+      a.href = url; a.download = 'lich-xep-ca_' + safe + '_' + weekDates[0] + '.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+      showToast('Đã xuất hình ảnh lịch ' + staff.length + ' nhân viên.');
+    }, 'image/png');
+  }
+  document.getElementById('btnExportScheduleImg').addEventListener('click', exportScheduleImage);
+
   // Mỗi màn hình hiện đúng 7 nhân viên; cửa hàng đông hơn thì cuộn dọc trong khung bảng.
   var SCHEDULE_VISIBLE_ROWS = 7;
   function fitScheduleScrollHeight(){
@@ -7428,7 +7608,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var targets = Array.prototype.slice.call(document.querySelectorAll('.copy-day-target-cb:checked')).map(function(cb){ return cb.value; });
     if(targets.length === 0){ closeCopyDayModal(); return; }
     var validStaff = getStoreEmployees(state.scheduleSelectedStore)
-      .filter(function(e){ return !isHiddenForWeek(e.maNV, state.scheduleWeekStart); });
+      .filter(function(e){ return !isHiddenForWeek(e.maNV, state.scheduleWeekStart) && !isResignedEmployee(e); });
     var sourceDate = copyDaySourceDate;
     var storeForCopy = state.scheduleSelectedStore;
     await saveScheduleMutation(function(fresh){
@@ -7489,7 +7669,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     var prevWeekStart = addDaysISO(state.scheduleWeekStart, -7);
     var validStaff = getStoreEmployees(state.scheduleSelectedStore)
-      .filter(function(e){ return !isHiddenForWeek(e.maNV, state.scheduleWeekStart); });
+      .filter(function(e){ return !isHiddenForWeek(e.maNV, state.scheduleWeekStart) && !isResignedEmployee(e); });
     var weekStart = state.scheduleWeekStart;
     var storeForCopy = state.scheduleSelectedStore;
     var copyCount = 0;
