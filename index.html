@@ -706,6 +706,7 @@
             <input type="password" id="li_password" autocomplete="current-password">
           </div>
           <div class="err full" id="e_login"></div>
+          <div class="full" style="font-size:12.5px;color:var(--ink-faint);">Quên mật khẩu? Liên hệ admin để được đặt lại mật khẩu.</div>
         </div>
       </div>
       <div class="modal-foot">
@@ -724,6 +725,7 @@
         <p class="subtitle">Quản lý công - lương nhân sự khối vận hành</p>
       </div>
     </div>
+    <button class="btn btn-ghost btn-sm" id="btnChangePw" style="position:absolute;right:120px;top:50%;transform:translateY(-50%);z-index:2;">Đổi mật khẩu</button>
     <button class="btn btn-ghost btn-sm" id="btnLogout" style="position:absolute;right:28px;top:50%;transform:translateY(-50%);z-index:2;">Đăng xuất</button>
   </header>
 
@@ -1507,6 +1509,7 @@
           <th style="width:160px;">Tên đăng nhập</th>
           <th>Các tab được phép</th>
           <th>Cửa hàng được phép (Xếp lịch cửa hàng)</th>
+          <th style="width:150px;">Mật khẩu</th>
           <th style="width:80px;"></th>
         </tr>
       </thead>
@@ -4550,7 +4553,43 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var permForm = document.getElementById('permForm');
   var pfEditingUsername = null;
 
+  // Mật khẩu hiển thị cho admin: lưu ở bảng riêng admin_user_passwords (chỉ admin đọc được, qua RLS), không nằm trong dữ liệu chung.
+  var adminPasswords = null; // { username: password }
+  var adminPasswordsLoading = false;
+  function pwCellHtml(u){
+    if(adminPasswords === null) return '<span style="color:var(--ink-faint);">…</span>';
+    var pw = adminPasswords[u.toLowerCase()];
+    if(!pw) return ''; // tài khoản cũ (mật khẩu đã mã hoá, không xem được) -> để trống
+    return '<code style="font-size:13px;background:var(--surface-2);padding:2px 7px;border-radius:6px;user-select:all;">'+escapeHtml(pw)+'</code> ' +
+      '<button type="button" class="btn btn-ghost btn-sm perm-delpw-btn" data-username="'+escapeHtml(u)+'" title="Xóa mật khẩu đang hiển thị (không đổi mật khẩu đăng nhập của người này)" style="padding:2px 7px;">Xóa</button>';
+  }
+  async function loadAdminPasswords(force){
+    if(adminPasswordsLoading) return;
+    if(adminPasswords !== null && !force) return;
+    adminPasswordsLoading = true;
+    try{
+      var r = await window.supabaseClient.from('admin_user_passwords').select('username,password');
+      var map = {};
+      if(!r.error && r.data) r.data.forEach(function(x){ map[String(x.username).toLowerCase()] = x.password; });
+      adminPasswords = map;
+    }catch(e){ adminPasswords = {}; }
+    adminPasswordsLoading = false;
+    renderPermissionTable();
+  }
+  window.addEventListener('qlns-pw-updated', function(){ loadAdminPasswords(true); });
+  document.addEventListener('click', async function(ev){
+    var b = ev.target && ev.target.closest ? ev.target.closest('.perm-delpw-btn') : null;
+    if(!b) return;
+    var u = b.dataset.username;
+    if(!window.confirm('Xóa mật khẩu đang hiển thị của "' + u + '"?\n\n(Chỉ xóa phần hiển thị trong bảng. Mật khẩu đăng nhập của người này KHÔNG bị đổi.)')) return;
+    b.disabled = true;
+    var r = await window.supabaseClient.rpc('admin_delete_stored_password', { p_username: u });
+    if(r.error){ b.disabled = false; showToast('Không xóa được: ' + r.error.message, true); return; }
+    showToast('Đã xóa mật khẩu hiển thị của ' + u + '.');
+    loadAdminPasswords(true);
+  });
   function renderPermissionTable(){
+    if(adminPasswords === null && !adminPasswordsLoading && (window.CURRENT_USERNAME || '').toLowerCase() === 'admin') loadAdminPasswords();
     var tbody = document.getElementById('permTbody');
     var empty = document.getElementById('permEmptyState');
     var usernames = Object.keys(state.userPermissions || {}).sort(function(a,b){ return a.localeCompare(b,'vi'); });
@@ -4580,7 +4619,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '<td class="col-code">'+escapeHtml(u)+linkedHtml+'</td>' +
         '<td><div style="display:flex;flex-wrap:wrap;gap:6px;">'+tabsHtml+'</div></td>' +
         '<td><div style="display:flex;flex-wrap:wrap;gap:6px;">'+storesHtml+'</div></td>' +
-        '<td><button type="button" class="btn btn-ghost btn-sm perm-edit-btn" data-username="'+escapeHtml(u)+'">Sửa</button></td>' +
+        '<td class="perm-pw-cell">'+pwCellHtml(u)+'</td>' +
+        '<td><button type="button" class="btn btn-ghost btn-sm perm-edit-btn" data-username="'+escapeHtml(u)+'">Sửa</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm perm-resetpw-btn" data-username="'+escapeHtml(u)+'" title="Nhập mật khẩu mới cho tài khoản này (đổi cả mật khẩu đăng nhập và mật khẩu hiển thị)">Sửa mật khẩu</button></td>' +
       '</tr>';
     }).join('');
   }
@@ -8294,6 +8335,35 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 })();
 </script>
 
+
+<!-- ========== Đổi mật khẩu / Admin đặt lại mật khẩu ========== -->
+<div class="overlay" id="pwOverlay" style="z-index:10000;">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+    <div class="modal-head"><h2 id="pwTitle">Đổi mật khẩu</h2><button class="close-x" id="pwClose" aria-label="Đóng">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-field full" id="pwOldWrap">
+          <label for="pw_old">Mật khẩu hiện tại <span class="req">*</span></label>
+          <input type="password" id="pw_old" autocomplete="current-password">
+        </div>
+        <div class="form-field full">
+          <label for="pw_new">Mật khẩu mới <span class="req">*</span> <span style="font-weight:400;color:var(--ink-faint);">(tối thiểu 6 ký tự)</span></label>
+          <input type="password" id="pw_new" autocomplete="new-password">
+        </div>
+        <div class="form-field full">
+          <label for="pw_new2">Nhập lại mật khẩu mới <span class="req">*</span></label>
+          <input type="password" id="pw_new2" autocomplete="new-password">
+        </div>
+        <div class="err full" id="e_pw"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="pwCancel" type="button">Hủy</button>
+      <button class="btn btn-primary" id="pwSave" type="button">Lưu mật khẩu</button>
+    </div>
+  </div>
+</div>
+
 <!-- ========== Kết nối Supabase + Đăng nhập/Đăng xuất (chạy SAU script chính) ========== -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -8369,6 +8439,64 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         }
         showApp(res.data.user.email);
       });
+    });
+
+
+    // ====== Đổi mật khẩu (tự đổi) + Admin đặt lại mật khẩu cho người khác ======
+    var pwOverlay = document.getElementById('pwOverlay');
+    var pwMode = 'self', pwTarget = '';
+    function pwErr(m){ document.getElementById('e_pw').textContent = m || ''; }
+    function openPw(mode, target){
+      pwMode = mode; pwTarget = target || '';
+      document.getElementById('pwTitle').textContent = mode === 'self' ? 'Đổi mật khẩu' : 'Sửa mật khẩu cho "' + pwTarget + '"';
+      document.getElementById('pwOldWrap').style.display = mode === 'self' ? '' : 'none';
+      ['pw_old','pw_new','pw_new2'].forEach(function(id){ document.getElementById(id).value = ''; });
+      pwErr('');
+      pwOverlay.classList.add('show');
+      setTimeout(function(){ document.getElementById(mode === 'self' ? 'pw_old' : 'pw_new').focus(); }, 60);
+    }
+    function closePw(){ pwOverlay.classList.remove('show'); }
+    document.getElementById('pwClose').addEventListener('click', closePw);
+    document.getElementById('pwCancel').addEventListener('click', closePw);
+    document.addEventListener('click', function(ev){
+      if(ev.target && ev.target.id === 'btnChangePw') openPw('self');
+      var rb = ev.target && ev.target.closest ? ev.target.closest('.perm-resetpw-btn') : null;
+      if(rb) openPw('admin', rb.dataset.username);
+    });
+    document.getElementById('pwSave').addEventListener('click', async function(){
+      var np = document.getElementById('pw_new').value, np2 = document.getElementById('pw_new2').value;
+      if(np.length < 6){ pwErr('Mật khẩu mới tối thiểu 6 ký tự.'); return; }
+      if(np !== np2){ pwErr('Hai lần nhập mật khẩu mới chưa giống nhau.'); return; }
+      var btn = document.getElementById('pwSave'); btn.disabled = true; btn.textContent = 'Đang lưu...';
+      try{
+        if(pwMode === 'self'){
+          var op = document.getElementById('pw_old').value;
+          if(!op){ pwErr('Vui lòng nhập mật khẩu hiện tại.'); return; }
+          var me = (window.CURRENT_USERNAME || '').toLowerCase();
+          var chk = await window.supabaseClient.auth.signInWithPassword({ email: me + '@' + window.FAKE_EMAIL_DOMAIN, password: op });
+          if(chk.error){ pwErr('Mật khẩu hiện tại không đúng.'); return; }
+          var up = await window.supabaseClient.auth.updateUser({ password: np });
+          if(up.error){ pwErr('Không đổi được mật khẩu: ' + up.error.message); return; }
+          try{ await window.supabaseClient.rpc('clear_my_stored_password'); }catch(e){} // mật khẩu cũ lưu cho admin không còn đúng nữa
+          closePw(); alert('Đã đổi mật khẩu thành công.');
+        } else {
+          var r = await window.supabaseClient.rpc('admin_reset_password', { p_username: pwTarget, p_new: np });
+          if(r.error){
+            var m = (r.error.message || '');
+            pwErr(/admin_reset_password|Could not find the function|42883|PGRST202/i.test(m)
+              ? 'Chưa cài hàm đặt lại mật khẩu trên Supabase. Hãy chạy file admin_reset_password.sql trong SQL Editor.'
+              : 'Không đặt lại được: ' + m);
+            return;
+          }
+          if(r.data !== true){ pwErr('Không tìm thấy tài khoản "' + pwTarget + '" trong hệ thống đăng nhập.'); return; }
+          window.dispatchEvent(new Event('qlns-pw-updated'));
+          closePw(); alert('Đã đổi mật khẩu cho "' + pwTarget + '". Mật khẩu mới đã hiển thị ở tab Phân quyền.');
+        }
+      } catch(e){
+        pwErr('Có lỗi xảy ra: ' + (e && e.message ? e.message : e));
+      } finally {
+        btn.disabled = false; btn.textContent = 'Lưu mật khẩu';
+      }
     });
 
     document.addEventListener('click', function (ev) {
