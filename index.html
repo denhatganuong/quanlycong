@@ -3045,6 +3045,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       oldMaNV = editingEmpBefore ? editingEmpBefore.maNV : null;
     }
     data.capNhatLuc = new Date().toISOString();
+    data.capNhatBoi = window.CURRENT_USERNAME || '';
     if(isEdit){
       data.id = editingId;
     } else {
@@ -3157,6 +3158,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       else display = escapeHtml(raw || '—');
       return '<div class="detail-item"><span class="dl">'+FIELD_LABELS[k]+'</span><span class="dv">'+display+'</span></div>';
     }).join('');
+    html += '<div class="detail-item"><span class="dl">Người cập nhật</span><span class="dv">'+escapeHtml(e.capNhatBoi || '—')+'</span></div>';
     html += '<div class="detail-item"><span class="dl">Cập nhật gần nhất</span><span class="dv">'+fmtDateTime(e.capNhatLuc)+'</span></div>';
     document.getElementById('detailGrid').innerHTML = html;
     detailOverlay.classList.add('show');
@@ -3472,7 +3474,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           maNV:r.maNV, hoTen:r.hoTen, hoKinhDoanh:r.hoKinhDoanh, chiNhanh:r.chiNhanh, chucDanh:r.chucDanh,
           ngayVaoLam:r.ngayVaoLam, ngaySinh:r.ngaySinh, sdt:r.sdt, cmndCccd:r.cmndCccd, stk:r.stk,
           nganHang:r.nganHang, diaChi:r.diaChi, mucLuong:r.mucLuong, trangThai:r.trangThai,
-          capNhatLuc: now
+          capNhatLuc: now, capNhatBoi: window.CURRENT_USERNAME || ''
         };
         if(r.thanhToan) payload.thanhToan = r.thanhToan; // cột trống thì giữ nguyên giá trị đang có
         if(byMaNV[key]){
@@ -4519,6 +4521,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(idx === -1) return false; // nhân viên đã bị xoá — không áp dụng được nữa
       Object.keys(req.changes).forEach(function(f){ fresh[idx][f] = req.changes[f]; });
       fresh[idx].capNhatLuc = new Date().toISOString();
+      fresh[idx].capNhatBoi = req.requestedBy || window.CURRENT_USERNAME || '';
     });
     if(!applyOk){
       document.getElementById('e_ur_approvePassword').textContent = 'Không áp dụng được (nhân viên có thể đã bị xoá hoặc có lỗi mạng) — thử lại.';
