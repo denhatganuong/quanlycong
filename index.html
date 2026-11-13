@@ -1256,7 +1256,7 @@
             </div>
             <div class="form-field">
               <label for="ur_mucLuong">Mức lương (VNĐ)</label>
-              <input type="number" id="ur_mucLuong" min="0" step="1000" inputmode="numeric">
+              <input type="number" id="ur_mucLuong" min="0" step="any" inputmode="numeric">
             </div>
             <div class="form-field">
               <label for="ur_sdt">Số điện thoại</label>
@@ -1657,7 +1657,7 @@
             </div>
             <div class="form-field">
               <label for="f_mucLuong">Mức lương (VNĐ) <span class="req">*</span></label>
-              <input type="number" id="f_mucLuong" name="mucLuong" min="0" step="1000" inputmode="numeric">
+              <input type="number" id="f_mucLuong" name="mucLuong" min="0" step="any" inputmode="numeric">
               <div class="err" id="e_mucLuong"></div>
             </div>
           </div>
@@ -5982,7 +5982,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   /* ---------- Salary allocation: rendering ---------- */
   function salaryCellInput(field, val){
-    return '<td><input class="cell-input" type="number" step="1000" min="0" data-field="'+field+'" value="'+(val||0)+'"></td>';
+    return '<td><input class="cell-input" type="number" step="any" min="0" data-field="'+field+'" value="'+(val||0)+'"></td>';
   }
   var BAO_HIEM_OPTIONS = ['Chưa Tham Gia', 'Đã Tham Gia', 'Cty Hỗ Trợ'];
   var BAO_HIEM_STYLE = {
