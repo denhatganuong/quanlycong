@@ -6519,6 +6519,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* ---------- Schedule: main grid ---------- */
   // Thu ngân ca 1 / ca 2 của cửa hàng theo ngày: state.cashierAssign[store|date] = { ca1: maNV, ca2: maNV }
   function cashierKey(store, date){ return store + '|' + date; }
+  var NO_CASHIER = '__NONE__';   // giá trị đặc biệt: ngày/ca đó không có thu ngân
   var DEFAULT_OPEN_TIME = '08:30';
   var DEFAULT_CLOSE_TIME = '22:00';
   function closeKey(store, date){ return store + '|' + date + '|close'; }
@@ -6544,12 +6545,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     var isCook = slot === 'cook';
     var opts = '<option value="" data-full="— Chọn —" data-short="— Chọn —">— Chọn —</option>';
+    if(!isCook) opts += '<option value="'+NO_CASHIER+'"'+(cur === NO_CASHIER ? ' selected' : '')+' data-full="Không thu ngân" data-short="Không thu ngân">Không thu ngân</option>';
     var found = false;
     dayStaff.forEach(function(e){
       if(e.maNV === cur) found = true;
       opts += opt(e.maNV, e.hoTen || e.maNV, e._borrowed ? ' (mượn)' : '', e.maNV === cur);
     });
-    if(cur && !found){
+    if(cur && cur !== NO_CASHIER && !found){
       var ce = state.employees.find(function(x){ return x.maNV === cur; });
       opts += opt(cur, ce ? ce.hoTen : cur, ' (không thuộc DS)', true);
     }
@@ -6570,15 +6572,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     head.addEventListener('change', function(ev){ var sel = ev.target.closest && ev.target.closest('.sched-tn-select'); if(sel) swap(sel, 'short'); });
   })();
   function cashierWeekCounts(store, weekDates){
-    var per = {}, total = 0;
+    var per = {}, total = 0, none = 0;
     weekDates.forEach(function(d){
       var rec = state.cashierAssign[cashierKey(store, d)] || {};
       var a = rec.ca1 || '', b = rec.ca2 || '';
       if(!a && !b) return;
+      if(a === NO_CASHIER) none++;
+      if(b === NO_CASHIER) none++;
       if(!a) a = b; if(!b) b = a;   // chỉ khai báo 1 ô -> người đó tính 2 ca
-      per[a] = (per[a]||0) + 1; per[b] = (per[b]||0) + 1; total += 2;
+      [a, b].forEach(function(x){ if(x === NO_CASHIER) return; per[x] = (per[x]||0) + 1; total++; });
     });
-    return { per: per, total: total };
+    return { per: per, total: total, none: none, expected: 14 - none };
   }
   function buildScheduleHeadHtml(weekDates, firstColLabel, store, roster){
     var headHtml = store
@@ -6604,8 +6608,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     headHtml += '<th class="sched-total-head">TỔNG GIỜ/TUẦN</th>';
     if(store){
       var cw = cashierWeekCounts(store, weekDates);
-      var bad = cw.total !== 14;
-      headHtml += '<th class="sched-tn-total-head'+(bad?' bad':'')+'" title="Tổng ca thu ngân trong tuần của cửa hàng (chuẩn 14 ca)">CA THU NGÂN<br><span class="sched-tn-sum">'+cw.total+'/14</span></th>';
+      var bad = cw.total !== cw.expected;
+      headHtml += '<th class="sched-tn-total-head'+(bad?' bad':'')+'" title="Tổng ca thu ngân trong tuần của cửa hàng (chuẩn 14 ca)">CA THU NGÂN<br><span class="sched-tn-sum">'+cw.total+'/'+cw.expected+'</span></th>';
     }
     headHtml += '<th class="sched-status-head">TRẠNG THÁI</th>';
     return headHtml;
@@ -6828,7 +6832,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var openT = state.openingHours[cashierKey(store, d)] || DEFAULT_OPEN_TIME;
       var closeT = state.openingHours[closeKey(store, d)] || DEFAULT_CLOSE_TIME;
       var rec = state.cashierAssign[cashierKey(store, d)] || {};
-      function nm(code){ var em = state.employees.find(function(x){ return x.maNV === code; }); return em ? shortName(em.hoTen) : ''; }
+      function nm(code){ if(code === NO_CASHIER) return 'Không thu ngân'; var em = state.employees.find(function(x){ return x.maNV === code; }); return em ? shortName(em.hoTen) : ''; }
       [[openT, openT !== DEFAULT_OPEN_TIME], [closeT, closeT !== DEFAULT_CLOSE_TIME], [nm(rec.ca1), !rec.ca1], [nm(rec.ca2), !rec.ca2], [nm(rec.cook), false, true]].forEach(function(it, k){
         var bx = dayX(idx) + 8, by = y + (k + 1) * HEAD_ROW_H + 4, bw = W_DAY - 16, bh = HEAD_ROW_H - 8;
         var isTime = k < 2;
@@ -6844,7 +6848,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     txt('CA THU', tnX + W_TN / 2, y + HEAD_ROW_H / 2 - 7, '700 11px ' + FONT, '#1c2b24', 'center');
     txt('NGÂN', tnX + W_TN / 2, y + HEAD_ROW_H / 2 + 7, '700 11px ' + FONT, '#1c2b24', 'center');
     var cw = cashierWeekCounts(store, weekDates);
-    txt(cw.total + '/14', tnX + W_TN / 2, y + HEAD_ROW_H + HEAD_ROW_H / 2, '700 13px ' + FONT, cw.total === 14 ? '#12663a' : '#b42318', 'center');
+    txt(cw.total + '/' + cw.expected, tnX + W_TN / 2, y + HEAD_ROW_H + HEAD_ROW_H / 2, '700 13px ' + FONT, cw.total === cw.expected ? '#12663a' : '#b42318', 'center');
     y += HEAD_ROWS * HEAD_ROW_H;
 
     // các hàng nhân viên
@@ -8011,7 +8015,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         if(!rec) continue;
         var slots = [rec.ca1, rec.ca2].filter(function(x){ return x && empByCode[x]; });
         if(slots.length === 0) continue;
-        if(slots.length === 1) slots = [slots[0], slots[0]];
+        if(slots.length === 1 && rec.ca1 !== NO_CASHIER && rec.ca2 !== NO_CASHIER) slots = [slots[0], slots[0]];
         slots.forEach(function(m){
           var o = per[m] = per[m] || { total: 0, stores: {} };
           o.total++; o.stores[sn] = (o.stores[sn] || 0) + 1;
