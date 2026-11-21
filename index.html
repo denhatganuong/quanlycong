@@ -7753,6 +7753,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var prevWeekStart = addDaysISO(state.scheduleWeekStart, -7);
     var validStaff = getStoreEmployees(state.scheduleSelectedStore)
       .filter(function(e){ return !isHiddenForWeek(e.maNV, state.scheduleWeekStart) && !isResignedEmployee(e); });
+    // Gồm cả nhân sự MƯỢN của tuần trước (vd. cửa hàng chỉ có nhân sự mượn như "ĐÀO TẠO")
+    var seenCopy = {}; validStaff.forEach(function(e){ seenCopy[e.maNV] = true; });
+    var prevBorrowed = getBorrowedStaffList(state.scheduleSelectedStore, prevWeekStart)
+      .filter(function(e){ return !seenCopy[e.maNV] && !isHiddenForWeek(e.maNV, state.scheduleWeekStart) && !isResignedEmployee(e); });
+    validStaff = validStaff.concat(prevBorrowed);
     var weekStart = state.scheduleWeekStart;
     var storeForCopy = state.scheduleSelectedStore;
     var copyCount = 0;
@@ -7783,6 +7788,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       showToast('Tuần trước chưa có lịch nào để sao chép.', true);
       return;
     }
+    // Giữ luôn danh sách nhân sự mượn của tuần trước sang tuần này
+    for(var bi = 0; bi < prevBorrowed.length; bi++){
+      if(prevBorrowed[bi] && prevBorrowed[bi].maNV) await borrowStaff(prevBorrowed[bi].maNV, storeForCopy, weekStart);
+    }
+    renderScheduleMain();
   }
 
   /* ---------- Schedule: lock (Chốt công) ---------- */
