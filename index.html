@@ -6369,10 +6369,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(!rec) return false;
     return weekStart > rec.effectiveWeek;
   }
+  // So khớp tên cửa hàng không phân biệt khoảng trắng thừa / hoa-thường / dạng Unicode (dữ liệu import Excel hay lệch)
+  function sameStore(a, b){
+    function n(x){ return String(x == null ? '' : x).normalize('NFC').replace(/[\s\u00a0\u200b]+/g, ' ').trim().toUpperCase(); }
+    return n(a) === n(b);
+  }
   function getStoreEmployees(storeName){
     var managerTarget = normalizeHeader(STORE_MANAGER_TITLE);
     return state.employees.filter(function(e){
-      return e.chiNhanh === storeName && normalizeHeader(e.chucDanh || '') !== managerTarget;
+      return sameStore(e.chiNhanh, storeName) && normalizeHeader(e.chucDanh || '') !== managerTarget;
     });
   }
   function scheduleKey(maNV, date){ return maNV + '|' + date; }
@@ -6440,7 +6445,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     Object.keys(state.schedule).forEach(function(k){
       var parts = k.split('|'), date = parts[1], code = parts[0];
       if(!date || date < weekStart || date > wEnd) return;
-      if(maNVs.indexOf(code) !== -1 || homeOf[code] === undefined || homeOf[code] === storeName) return;
+      if(maNVs.indexOf(code) !== -1 || homeOf[code] === undefined || sameStore(homeOf[code], storeName)) return;
       var entry = state.schedule[k];
       if(!entry || entry.off) return;
       var hasHere = getScheduleShiftObjects(code, date).some(function(o){ return o.store === storeName; });
@@ -7474,7 +7479,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     var managerTarget = normalizeHeader(STORE_MANAGER_TITLE);
     var candidates = state.employees.filter(function(e){
-      return e.chiNhanh === source && normalizeHeader(e.chucDanh || '') !== managerTarget
+      return sameStore(e.chiNhanh, source) && normalizeHeader(e.chucDanh || '') !== managerTarget
         && !isHiddenForWeek(e.maNV, state.scheduleWeekStart);
     }).sort(function(a,b){ return (a.hoTen||'').localeCompare(b.hoTen||'', 'vi'); });
 
