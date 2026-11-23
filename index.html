@@ -3044,6 +3044,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var editingEmpBefore = state.employees.find(function(x){ return x.id === editingId; });
       oldMaNV = editingEmpBefore ? editingEmpBefore.maNV : null;
     }
+    var oldChiNhanhEdit = (isEdit && editingEmpBefore) ? editingEmpBefore.chiNhanh : null;
     data.capNhatLuc = new Date().toISOString();
     data.capNhatBoi = window.CURRENT_USERNAME || '';
     if(isEdit){
@@ -3096,6 +3097,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     if(isEdit && oldMaNV && data.maNV && oldMaNV !== data.maNV){
       await migrateEmployeeMaNV(oldMaNV, data.maNV);
+    }
+
+    // Chuyển cửa hàng (hoặc hồ sơ đang làm việc) -> bỏ trạng thái "Nghỉ việc/Bỏ việc" cũ của bảng xếp lịch,
+    // nếu không người đó sẽ bị ẩn ở cả cửa hàng cũ lẫn cửa hàng mới.
+    if(isEdit && data.maNV && data.trangThai !== 'Nghỉ việc' &&
+       (!sameStore(oldChiNhanhEdit, data.chiNhanh) || getEmployeeScheduleStatus(data.maNV))){
+      var tgtMaNV = data.maNV;
+      await mutateStateKeySafe('employeeScheduleStatus', function(fresh){ delete fresh[tgtMaNV]; });
     }
 
     if(!isEdit){
@@ -4516,6 +4525,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return;
     }
 
+    var empBeforeReq = state.employees.find(function(x){ return x.id === req.employeeId; });
+    var oldBranchReq = empBeforeReq ? empBeforeReq.chiNhanh : null;
     var applyOk = await saveEmployeesMutation(function(fresh){
       var idx = fresh.findIndex(function(x){ return x.id === req.employeeId; });
       if(idx === -1) return false; // nhân viên đã bị xoá — không áp dụng được nữa
@@ -4523,6 +4534,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       fresh[idx].capNhatLuc = new Date().toISOString();
       fresh[idx].capNhatBoi = req.requestedBy || window.CURRENT_USERNAME || '';
     });
+    if(applyOk && req.changes && req.changes.chiNhanh !== undefined && !sameStore(oldBranchReq, req.changes.chiNhanh) && empBeforeReq && req.changes.trangThai !== 'Nghỉ việc'){
+      await mutateStateKeySafe('employeeScheduleStatus', function(fresh){ delete fresh[empBeforeReq.maNV]; });
+    }
     if(!applyOk){
       document.getElementById('e_ur_approvePassword').textContent = 'Không áp dụng được (nhân viên có thể đã bị xoá hoặc có lỗi mạng) — thử lại.';
       return;
