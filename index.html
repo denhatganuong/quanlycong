@@ -8282,13 +8282,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       grouped.groups[storeName].forEach(function(e){
         var stats = computeMonthlyStats(e, year, month, numDays, storeName);
         var row = [storeName, e.maNV, e.hoTen, e.chucDanh || '', stats.soGioThucHien];
+        var hasWork = false;
         for(var dd = 1; dd <= numDays; dd++){
           var info = computeDayInfo(e.maNV, tcDateISO(year, month, dd), storeName);
+          if(info && info.type !== 'off' && info.hours > 0) hasWork = true;
           row.push(!info ? '' : (info.type === 'off' ? 'OFF' : info.hours));
         }
-        data.push(row);
+        if(hasWork) data.push(row);   // chỉ xuất người có công trong tháng
       });
     });
+    if(data.length <= 2){ showToast('Tháng này chưa có nhân viên nào có công để xuất.', true); return; }
     var ws = XLSX.utils.aoa_to_sheet(data);
     ws['!cols'] = headers.map(function(h, i){ return {wch: i === 0 ? 22 : i === 2 ? 26 : i < 5 ? 16 : 7}; });
     ws['!freeze'] = { xSplit: 3, ySplit: 2 };
