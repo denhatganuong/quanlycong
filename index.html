@@ -3048,6 +3048,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var oldChiNhanhEdit = (isEdit && editingEmpBefore) ? editingEmpBefore.chiNhanh : null;
     data.capNhatLuc = new Date().toISOString();
     data.capNhatBoi = window.CURRENT_USERNAME || '';
+    if(data.trangThai === 'Nghỉ việc'){
+      if(!(isEdit && editingEmpBefore && editingEmpBefore.trangThai === 'Nghỉ việc' && editingEmpBefore.ngayNghiViec)) data.ngayNghiViec = dateToISO(new Date());
+      else data.ngayNghiViec = editingEmpBefore.ngayNghiViec;
+    } else { data.ngayNghiViec = ''; }
     if(isEdit){
       data.id = editingId;
     } else {
@@ -4534,6 +4538,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       Object.keys(req.changes).forEach(function(f){ fresh[idx][f] = req.changes[f]; });
       fresh[idx].capNhatLuc = new Date().toISOString();
       fresh[idx].capNhatBoi = req.requestedBy || window.CURRENT_USERNAME || '';
+      if(req.changes && req.changes.trangThai !== undefined){
+        if(req.changes.trangThai === 'Nghỉ việc') fresh[idx].ngayNghiViec = dateToISO(new Date());
+        else fresh[idx].ngayNghiViec = '';
+      }
     });
     if(applyOk && req.changes && req.changes.chiNhanh !== undefined && !sameStore(oldBranchReq, req.changes.chiNhanh) && empBeforeReq && req.changes.trangThai !== 'Nghỉ việc'){
       await mutateStateKeySafe('employeeScheduleStatus', function(fresh){ delete fresh[empBeforeReq.maNV]; });
@@ -5966,7 +5974,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
   function buildSalaryRows(){
     // Bảng Phân bổ lương không hiện nhân viên đã Nghỉ việc (tính công vẫn dùng buildSalaryRow riêng nên không ảnh hưởng)
-    return state.employees.filter(function(e){ return e.trangThai !== 'Nghỉ việc'; }).map(buildSalaryRow);
+    // Người nghỉ việc vẫn hiện trong chính tháng nghỉ (còn phải chốt lương); từ tháng sau mới ẩn.
+    var curYM = dateToISO(new Date()).slice(0, 7);
+    return state.employees.filter(function(e){
+      if(e.trangThai !== 'Nghỉ việc') return true;
+      var rd = e.ngayNghiViec || e.capNhatLuc;      // ngày nghỉ; hồ sơ cũ chưa có thì lấy ngày cập nhật cuối
+      if(!rd) return false;
+      var ym = /^\d{4}-\d{2}/.test(rd) ? rd.slice(0, 7) : dateToISO(new Date(rd)).slice(0, 7);
+      return ym >= curYM;
+    }).map(buildSalaryRow);
   }
   function getFilteredSalaryRows(){
     var rows = buildSalaryRows();
